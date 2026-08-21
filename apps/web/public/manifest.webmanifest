@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "DeepSeek Harness",
-  "short_name": "DSH",
+  "name": "ione harness",
+  "short_name": "ione",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",
