@@ -1,3 +1,4 @@
+import { IoneHarnessLogo } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { HeroBrandMarkOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SidebarBrandMarkOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 
@@ -9,20 +10,7 @@ type OfficialBrandMarkProps = HeroBrandMarkOwnerProps & SidebarBrandMarkOwnerPro
  * @returns the iONE mark.
  */
 export function OfficialBrandMark({ size, className }: OfficialBrandMarkProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 64 64"
-      className={className}
-      fill="none"
-      aria-hidden="true"
-    >
-      <rect width="64" height="64" rx="14" fill="#1677ff" />
-      <path fill="#fff" d="M16 14h8v36h-8zM31 14h17v7H39v8h8v7h-8v14h-8z" />
-      <circle cx="49" cy="48" r="5" fill="#20b26b" />
-    </svg>
-  )
+  return <IoneHarnessLogo size={size} className={className} />
 }
 
 /**
