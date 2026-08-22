@@ -18,6 +18,7 @@ import type { ModelSelection } from '@deepseek-ai/dsh-api-remotes/client'
 import type { CommandContribution, SelectOption } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ModelSelectInjected } from '../src/client/slots.ts'
 import { apply, inject } from '../src/client/index.ts'
+import { modelProviderAllowlist, visibleModelDirectory } from '../src/client/directory.ts'
 import { zh } from '../src/client/locales.ts'
 
 const sid = (k: string): SessionId => k as SessionId
@@ -140,6 +141,39 @@ async function bench() {
 }
 
 const projection = (id: string) => ({ sessionId: sid(id) })
+
+describe('deployment model provider allowlist', () => {
+  it('keeps only approved providers and makes a hidden legacy selection unroutable', () => {
+    const qwen = {
+      id: 'qwen',
+      name: 'Qwen Server',
+      models: [{ id: 'qwen3.6-35b-a3b-fp8', name: 'qwen3.6-35b-a3b-fp8' }],
+    }
+    const directory = visibleModelDirectory({
+      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      routable: true,
+      groups: [...GROUPS, qwen],
+      failures: [
+        { id: 'deepseek-official', name: 'DeepSeek', message: 'hidden failure' },
+        { id: 'qwen', name: 'Qwen Server', message: 'visible failure' },
+      ],
+    }, modelProviderAllowlist(' qwen, qwen-private '))
+
+    expect(directory.groups).toEqual([qwen])
+    expect(directory.failures.map(failure => failure.id)).toEqual(['qwen'])
+    expect(directory.routable).toBe(false)
+  })
+
+  it('preserves the complete upstream directory when no allowlist is configured', () => {
+    const directory = {
+      current: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+      routable: true,
+      groups: GROUPS,
+      failures: [],
+    }
+    expect(visibleModelDirectory(directory, modelProviderAllowlist(''))).toBe(directory)
+  })
+})
 
 describe('ui-model-selection dual entry', () => {
   it('registers the /model contribution and the composer model seat', async () => {

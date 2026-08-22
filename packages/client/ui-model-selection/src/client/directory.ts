@@ -11,6 +11,54 @@ import type {
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 
+/** Public build flag limiting model selection to deployment-approved provider ids. */
+const PROVIDER_ALLOWLIST = process.env.DSH_CLIENT_IONE_MODEL_PROVIDER_ALLOWLIST
+
+/**
+ * Parse the optional deployment provider allowlist.
+ *
+ * The flag is intentionally build-time and client-public: it controls only
+ * which already-advertised routes an authenticated deployment exposes in its
+ * model-selection surfaces. An absent or blank value preserves upstream DSH
+ * behavior; a comma-separated value such as `qwen` narrows every shared
+ * directory to those exact provider ids.
+ *
+ * @param value - comma-separated provider ids from the public build environment.
+ * @returns normalized provider ids, or undefined when no restriction is configured.
+ */
+export function modelProviderAllowlist(
+  value: string | undefined = PROVIDER_ALLOWLIST,
+): ReadonlySet<string> | undefined {
+  const providers = value?.split(',').map(provider => provider.trim()).filter(Boolean) ?? []
+  return providers.length === 0 ? undefined : new Set(providers)
+}
+
+/**
+ * Project a Host directory through the deployment provider allowlist.
+ *
+ * When a legacy session still points at a hidden provider, `routable` becomes
+ * false even if that adapter remains loaded server-side. The composer is then
+ * blocked until the user selects an approved advertised route, preventing a
+ * hidden provider from remaining usable through stale session state.
+ *
+ * @param directory - fresh Host model directory.
+ * @param allowlist - deployment-approved provider ids.
+ * @returns the directory visible to both model-selection entries.
+ */
+export function visibleModelDirectory(
+  directory: SessionModels,
+  allowlist: ReadonlySet<string> | undefined = modelProviderAllowlist(),
+): SessionModels {
+  if (allowlist === undefined) return directory
+  const groups = directory.groups.filter(group => allowlist.has(group.id))
+  return {
+    ...directory,
+    groups,
+    failures: directory.failures.filter(failure => allowlist.has(failure.id)),
+    routable: directory.routable && groups.some(group => group.id === directory.current.provider),
+  }
+}
+
 /** Directory snapshot both entries render from. */
 export interface ModelDirectoryState {
   /** Model selection the host reports for the next assembled step; null before the first load. */
@@ -67,13 +115,14 @@ export class ModelDirectory {
     const { result } = await this.sessions.models({ sessionId: this.sessionId })
     if (this.disposed || generation !== this.generation) {
       if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
-      return result.value
+      return visibleModelDirectory(result.value)
     }
     if (!result.ok) {
       this.store.update((s) => { s.status = 'error'; s.error = `${result.error.code}: ${result.error.message}` })
       throw new Error(`session.models failed: ${result.error.code}: ${result.error.message}`)
     }
-    const { current, routable, groups, failures } = result.value
+    const visible = visibleModelDirectory(result.value)
+    const { current, routable, groups, failures } = visible
     this.store.update((s) => {
       s.current = current
       s.routable = routable
@@ -82,7 +131,7 @@ export class ModelDirectory {
       s.status = 'ready'
       s.error = null
     })
-    return result.value
+    return visible
   }
 
   /**
