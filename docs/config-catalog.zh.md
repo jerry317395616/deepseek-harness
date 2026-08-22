@@ -2931,7 +2931,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts:20`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts:22`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
 <a id="deepseek-aidsh-tool-web"></a>
 

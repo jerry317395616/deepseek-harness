@@ -277,7 +277,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules',
     dir: 'tool-tongjianyun-nutrition-rules',
     source: 'packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts',
-    requires: ['ctx.tools', 'ctx.credentials'],
+    requires: ['ctx.tools', 'ctx.credentials', 'ctx.systemPrompt'],
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(LocalCredentialProvider, {
@@ -291,7 +291,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       })
     },
     note:
-      'The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.',
+      'The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference. A fixed routing section requires read-only evidence calls for Tongjianyun standard and actual-recipe questions; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',

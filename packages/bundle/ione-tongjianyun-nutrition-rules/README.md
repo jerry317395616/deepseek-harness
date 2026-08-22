@@ -28,7 +28,7 @@ Nothing while disabled. When enabled, the [Tongjianyun nutrition-rule tool schem
 
 #### Token effect
 
-The Bundle adds no prompt or schema itself. Enabling its row adds the six fixed tool schemas and ordinary tool-result payloads owned by the tool package.
+The Bundle adds no prompt or schema itself. Enabling its row adds the eight fixed tool schemas, one fixed evidence-routing prompt section, and ordinary tool-result payloads owned by the tool package.
 
 #### KV Cache effect
 

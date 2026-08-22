@@ -2913,7 +2913,7 @@ Source: [`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/s
 
 ## `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules`
 
-Requires: `tools` · `credentials`
+Requires: `tools` · `credentials` · `systemPrompt`
 
 ```ts config-catalog
 /** Configurable connection facts for one Tongjianyun Frappe MCP endpoint. */
@@ -2929,7 +2929,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts:20`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts:22`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
 <a id="deepseek-aidsh-tool-web"></a>
 

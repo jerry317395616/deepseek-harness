@@ -25,7 +25,7 @@
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | bash 工具是 bash 执行器 seam 面向模型的消费方。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具（来自 `@deepseek-ai/dsh-tool-jobs`）收集／停止；禁用 `enableRunInBackground` 配置（默认为 true）后，该参数会被完全移除。 |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费方（由 `@deepseek-ai/dsh-pwsh-local` 等 PowerShell 执行器为 `ctx.shell` 提供后端）；除沙箱接口外，它逐项对应 bash 工具调用。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具收集／停止；托管的 `DSH_*` 环境来自 `@deepseek-ai/dsh-shell-env`。每次调用都在新进程中运行，不使用持久 PTY 会话。路径采用原生 `C:\...` 形式，变量采用 `$env:NAME`。 |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`、`cordis_inspect_list`、`cordis_inspect_query`、`cordis_inspect_self`、`cordis_run`、`cordis_stop`、`cordis_undefine` | `ctx.tools`、`ctx.dynamicCordisRunner` | `tool/call`、`tool/result`、`process-local dynamic package lifecycle` | - | 不在任何随产品发布的树中，需要显式选择启用；动态 Package 代码可以访问真实运行时，见 .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md。该工具集注入 `@deepseek-ai/dsh-cordis-host-runner` 提供的 `ctx.dynamicCordisRunner`，后者拥有定义注册表和 vm 沙箱；组合缺少它时这些工具不会激活。运行中的 Package 在停止、undefine 或 DSH 重启前可以注册**额外的**模型可见工具；发生这类工具集变化时，系统会记录完整且有变动的请求头。 |
-| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.credentials` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
+| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`、`tongjianyun_explain_nutrition_standard`、`tongjianyun_get_weekly_nutrition_analysis`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.credentials`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它。固定路由区段要求涉及童健云标准和真实食谱的问题先调用只读取证工具；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
@@ -543,6 +543,127 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
+### `tongjianyun_explain_nutrition_standard`
+
+必须用于回答童健云周食谱营养分析中“全日标准/园内目标怎样计算”的问题。自动模式按真实学生名册加权，手动模式按所选年龄性别平均；返回参与计算的分量、完整算式、结果、单位和标准来源；只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "metric": {
+      "type": "string",
+      "description": "营养指标键；热量使用 energy。默认 energy。",
+      "enum": [
+        "energy",
+        "protein",
+        "calcium",
+        "iron",
+        "zinc",
+        "vitamin_a",
+        "vitamin_b1",
+        "vitamin_b2",
+        "vitamin_c"
+      ]
+    },
+    "recipe": {
+      "type": "string",
+      "description": "童健云食谱编号；留空使用最新未删除食谱。"
+    },
+    "standard_mode": {
+      "type": "string",
+      "description": "标准计算模式。默认自动（按学生档案）。",
+      "enum": [
+        "自动（按学生档案）",
+        "手动估算"
+      ]
+    },
+    "student_groups": {
+      "description": "自动模式下可选的班级编号数组；留空统计全园启用学生。"
+    },
+    "age_group": {
+      "type": "string",
+      "description": "手动模式的人群年龄。默认 4–6岁平均。",
+      "enum": [
+        "4岁",
+        "5岁",
+        "6岁",
+        "4–5岁平均",
+        "4–6岁平均"
+      ]
+    },
+    "gender": {
+      "type": "string",
+      "description": "报表人群性别。默认男女平均。",
+      "enum": [
+        "男",
+        "女",
+        "男女平均"
+      ]
+    },
+    "garden_ratio": {
+      "type": "number",
+      "description": "园内供给比例，30 至 100，默认 80。"
+    }
+  }
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_get_weekly_nutrition_analysis`
+
+必须用于回答童健云某份或最新周食谱的实际营养值、达标情况、食材构成或结论。按当前用户权限读取真实食谱、学生范围与当前生效规则并实时分析；只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "recipe": {
+      "type": "string",
+      "description": "童健云食谱编号；留空使用最新未删除食谱。"
+    },
+    "standard_mode": {
+      "type": "string",
+      "description": "标准计算模式。默认自动（按学生档案）。",
+      "enum": [
+        "自动（按学生档案）",
+        "手动估算"
+      ]
+    },
+    "student_groups": {
+      "description": "自动模式下可选的班级编号数组；留空统计全园启用学生。"
+    },
+    "age_group": {
+      "type": "string",
+      "description": "手动模式的人群年龄。默认 4–6岁平均。",
+      "enum": [
+        "4岁",
+        "5岁",
+        "6岁",
+        "4–5岁平均",
+        "4–6岁平均"
+      ]
+    },
+    "gender": {
+      "type": "string",
+      "description": "报表人群性别。默认男女平均。",
+      "enum": [
+        "男",
+        "女",
+        "男女平均"
+      ]
+    },
+    "garden_ratio": {
+      "type": "number",
+      "description": "园内供给比例，30 至 100，默认 80。"
+    }
+  }
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
 ### `tongjianyun_list_nutrition_rules`
 
 列出童健云周食谱营养计算规则及当前生效版本。仅用于查询，不会修改任何计算。
@@ -673,7 +794,7 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
-可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。
+可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它。固定路由区段要求涉及童健云标准和真实食谱的问题先调用只读取证工具；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

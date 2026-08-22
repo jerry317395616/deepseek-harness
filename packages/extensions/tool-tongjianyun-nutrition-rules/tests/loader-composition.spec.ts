@@ -144,12 +144,14 @@ function execute(ctx: Context, call: string, name: string, arguments_: Record<st
 }
 
 describe('Tongjianyun nutrition-rule Loader composition', () => {
-  it('loads six model-visible tools, resolves secrets at call time, and removes tools with its Loader fiber', async () => {
+  it('loads eight model-visible tools and routing guidance, resolves secrets at call time, and disposes both', async () => {
     const mock = await startFrappeMcp()
     const ctx = await loadComposition(mock.endpoint)
 
     expect(ctx.tools.schemas().map(tool => tool.name)).toMatchInlineSnapshot(`
       [
+        "tongjianyun_explain_nutrition_standard",
+        "tongjianyun_get_weekly_nutrition_analysis",
         "tongjianyun_list_nutrition_rules",
         "tongjianyun_create_nutrition_rule_draft",
         "tongjianyun_preview_nutrition_rule",
@@ -160,6 +162,8 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
     `)
 
     const cases: Array<[string, string, Record<string, unknown>]> = [
+      ['explain-standard', 'tongjianyun_explain_nutrition_standard', { metric: 'energy', standard_mode: '自动（按学生档案）' }],
+      ['weekly-analysis', 'tongjianyun_get_weekly_nutrition_analysis', { recipe: 'RECIPE-0001', student_groups: ['CLASS-1'] }],
       ['list', 'tongjianyun_list_nutrition_rules', { status: '已发布', limit: 5 }],
       ['draft', 'tongjianyun_create_nutrition_rule_draft', { title: '提高钙目标', changes: { targets: { calcium: 600 } } }],
       ['preview', 'tongjianyun_preview_nutrition_rule', { rule_set: 'NUTRITION-RULE-0001' }],
@@ -173,6 +177,8 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
     }
 
     expect(mock.requests.map(request => request.body.params.name)).toEqual([
+      'frappe_explain_tongjianyun_nutrition_standard',
+      'frappe_get_tongjianyun_weekly_nutrition_analysis',
       'frappe_list_tongjianyun_nutrition_rules',
       'frappe_create_tongjianyun_nutrition_rule_draft',
       'frappe_preview_tongjianyun_nutrition_rule',
@@ -186,10 +192,23 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
       expect(request.body.params.arguments).toMatchObject({ actor_token: 'test-actor-token' })
     }
 
+    expect((await ctx.systemPrompt.assemble()).sections.find(
+      section => section.name === 'tool:tongjianyun-nutrition',
+    )?.text).toMatchInlineSnapshot(`
+      "童健云营养业务取证规则：
+      - 用户询问“周食谱营养分析”的标准值、全日标准、园内目标或这些数值如何计算时，必须先调用 tongjianyun_explain_nutrition_standard。
+      - 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。
+      - 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。
+      - 工具调用失败时应明确说明无法读取童健云数据，不得编造数值、规则版本或计算依据。"
+    `)
+
     const nutritionEntry = [...ctx.loader.entries()].find(entry => entry.options.id === 'tongjianyun-nutrition-rules')
     if (nutritionEntry === undefined) throw new Error('nutrition rules entry is missing')
     await nutritionEntry._dispose()
     expect(ctx.tools.schemas()).toEqual([])
+    expect((await ctx.systemPrompt.assemble()).sections.some(
+      section => section.name === 'tool:tongjianyun-nutrition',
+    )).toBe(false)
   })
 
   it('rejects destructive operations before transport unless the exact confirmation is present', async () => {

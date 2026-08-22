@@ -21,7 +21,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The bash tool is the model-facing consumer of the bash executor seam. A `run_in_background` run registers with the generic `ctx.jobs` runtime and is collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; the `enableRunInBackground` config (default true) removes the parameter entirely when disabled. |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The pwsh tool is the PowerShell-dialect consumer of the bash executor seam for Windows compositions (a PowerShell executor such as `@deepseek-ai/dsh-pwsh-local` backs `ctx.shell`); it mirrors the bash tool call-for-call minus sandbox controls — `run_in_background` runs register with the generic `ctx.jobs` runtime and are collected/stopped through the `job_*` tools, and the managed `DSH_*` environment comes from `@deepseek-ai/dsh-shell-env`. Each call runs in a fresh process (no persistent PTY session), with native `C:\...` paths and `$env:NAME` variables. |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`, `cordis_inspect_list`, `cordis_inspect_query`, `cordis_inspect_self`, `cordis_run`, `cordis_stop`, `cordis_undefine` | `ctx.tools`, `ctx.dynamicCordisRunner` | `tool/call`, `tool/result`, `process-local dynamic package lifecycle` | - | Not in any shipped tree (a deliberate opt-in — dynamic package code reaches the real runtime, see .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md). The toolset injects `ctx.dynamicCordisRunner` from `@deepseek-ai/dsh-cordis-host-runner`, which owns the definition registry and the vm sandbox; a composition missing it never activates the tools. A running package may register ADDITIONAL model-visible tools until it is stopped, undefined, or DSH restarts; a full changed request header logs those tool-set changes. |
-| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.credentials` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
+| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_explain_nutrition_standard`, `tongjianyun_get_weekly_nutrition_analysis`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.credentials`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference. A fixed routing section requires read-only evidence calls for Tongjianyun standard and actual-recipe questions; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent pwsh tool, the Windows counterpart of the persistent bash tool; deployment composition supplies a pwsh-dialect PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
@@ -539,6 +539,127 @@ Not in any shipped tree (a deliberate opt-in — dynamic package code reaches th
 
 Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
+### `tongjianyun_explain_nutrition_standard`
+
+必须用于回答童健云周食谱营养分析中“全日标准/园内目标怎样计算”的问题。自动模式按真实学生名册加权，手动模式按所选年龄性别平均；返回参与计算的分量、完整算式、结果、单位和标准来源；只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "metric": {
+      "type": "string",
+      "description": "营养指标键；热量使用 energy。默认 energy。",
+      "enum": [
+        "energy",
+        "protein",
+        "calcium",
+        "iron",
+        "zinc",
+        "vitamin_a",
+        "vitamin_b1",
+        "vitamin_b2",
+        "vitamin_c"
+      ]
+    },
+    "recipe": {
+      "type": "string",
+      "description": "童健云食谱编号；留空使用最新未删除食谱。"
+    },
+    "standard_mode": {
+      "type": "string",
+      "description": "标准计算模式。默认自动（按学生档案）。",
+      "enum": [
+        "自动（按学生档案）",
+        "手动估算"
+      ]
+    },
+    "student_groups": {
+      "description": "自动模式下可选的班级编号数组；留空统计全园启用学生。"
+    },
+    "age_group": {
+      "type": "string",
+      "description": "手动模式的人群年龄。默认 4–6岁平均。",
+      "enum": [
+        "4岁",
+        "5岁",
+        "6岁",
+        "4–5岁平均",
+        "4–6岁平均"
+      ]
+    },
+    "gender": {
+      "type": "string",
+      "description": "报表人群性别。默认男女平均。",
+      "enum": [
+        "男",
+        "女",
+        "男女平均"
+      ]
+    },
+    "garden_ratio": {
+      "type": "number",
+      "description": "园内供给比例，30 至 100，默认 80。"
+    }
+  }
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_get_weekly_nutrition_analysis`
+
+必须用于回答童健云某份或最新周食谱的实际营养值、达标情况、食材构成或结论。按当前用户权限读取真实食谱、学生范围与当前生效规则并实时分析；只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "recipe": {
+      "type": "string",
+      "description": "童健云食谱编号；留空使用最新未删除食谱。"
+    },
+    "standard_mode": {
+      "type": "string",
+      "description": "标准计算模式。默认自动（按学生档案）。",
+      "enum": [
+        "自动（按学生档案）",
+        "手动估算"
+      ]
+    },
+    "student_groups": {
+      "description": "自动模式下可选的班级编号数组；留空统计全园启用学生。"
+    },
+    "age_group": {
+      "type": "string",
+      "description": "手动模式的人群年龄。默认 4–6岁平均。",
+      "enum": [
+        "4岁",
+        "5岁",
+        "6岁",
+        "4–5岁平均",
+        "4–6岁平均"
+      ]
+    },
+    "gender": {
+      "type": "string",
+      "description": "报表人群性别。默认男女平均。",
+      "enum": [
+        "男",
+        "女",
+        "男女平均"
+      ]
+    },
+    "garden_ratio": {
+      "type": "number",
+      "description": "园内供给比例，30 至 100，默认 80。"
+    }
+  }
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
 ### `tongjianyun_list_nutrition_rules`
 
 列出童健云周食谱营养计算规则及当前生效版本。仅用于查询，不会修改任何计算。
@@ -669,7 +790,7 @@ Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](..
 
 Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
-The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.
+The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference. A fixed routing section requires read-only evidence calls for Tongjianyun standard and actual-recipe questions; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

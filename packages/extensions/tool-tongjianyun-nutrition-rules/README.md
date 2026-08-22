@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Registers six native Harness tools for the Tongjianyun weekly-menu nutrition-rule lifecycle: inspect rules, create a draft, preview a draft, submit it for review, publish an approved rule, and roll a historical rule forward as a new published version. The package calls Tongjianyun's authenticated Frappe MCP method directly; it does not expose the MCP credential or optional current-user assertion in a model-visible schema or tool result.
+Registers eight native Harness tools for Tongjianyun weekly-menu nutrition. Two read-only tools explain the roster-weighted or manually selected full-day standard and calculate the latest or selected recipe from real Tongjianyun data. Six controlled tools cover the nutrition-rule lifecycle: inspect rules, create a draft, preview a draft, submit it for review, publish an approved rule, and roll a historical rule forward as a new published version. The package calls Tongjianyun's authenticated Frappe MCP method directly; it does not expose the MCP credential or optional current-user assertion in a model-visible schema or tool result.
 
 Configure the package through a profile or Bundle patch. `credentialRef` names a credential-store value containing the Frappe integration account in `api_key:api_secret` form. `actorTokenRef` is optional and names a trusted, rotating current-user assertion resolved for every call; enable it only when the Tongjianyun server is configured to require it. `timeoutMs` is enforced by the Harness tool-timeout policy.
 
@@ -16,7 +16,7 @@ Configure the package through a profile or Bundle patch. `credentialRef` names a
     timeoutMs: 30000
 ```
 
-The Frappe integration account remains subject to Tongjianyun's server-side role checks, audit trail, rule state transitions, and the exact publish (`确认发布`) or rollback (`确认回滚`) confirmation. The plugin checks the destructive confirmation before sending the request; the server checks it again.
+The Frappe integration account remains subject to Tongjianyun's server-side role checks, audit trail, rule state transitions, and the exact publish (`确认发布`) or rollback (`确认回滚`) confirmation. The plugin checks the destructive confirmation before sending the request; the server checks it again. A stable system-prompt section requires the model to use the read-only evidence tools before answering questions about Tongjianyun standards or actual recipe results. If the Frappe call fails, the model is instructed to report the missing evidence instead of inventing a calculation.
 
 ## Model Experience
 
@@ -24,11 +24,11 @@ The Frappe integration account remains subject to Tongjianyun's server-side role
 
 #### What the model sees
 
-The six tool schemas are listed in the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-tongjianyun-nutrition-rules). Tool results contain only the structured result returned by Frappe; API credentials, HTTP headers, the endpoint, and optional actor assertions never enter model context.
+The eight tool schemas are listed in the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-tongjianyun-nutrition-rules). Tool results contain only the structured result returned by Frappe; API credentials, HTTP headers, the endpoint, and optional actor assertions never enter model context. The fixed routing section tells the model when to use `tongjianyun_explain_nutrition_standard` or `tongjianyun_get_weekly_nutrition_analysis`.
 
 #### Token effect
 
-One fixed native-tool schema set joins each request while this plugin is mounted. Each completed call appends its structured nutrition-rule result through the ordinary tool-result flow; result size is controlled by Tongjianyun's MCP response.
+One fixed native-tool schema set and one fixed routing section join each request while this plugin is mounted. Each completed call appends its structured nutrition result through the ordinary tool-result flow; result size is controlled by Tongjianyun's MCP response.
 
 #### KV Cache effect
 

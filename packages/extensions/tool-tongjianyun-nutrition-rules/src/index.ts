@@ -8,13 +8,15 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
+// Declaration merge only: makes ctx.systemPrompt visible for routing guidance.
+import type {} from '@deepseek-ai/dsh-system-prompt'
 import { NutritionMcpClient, resolveNutritionMcpSpec } from './mcp.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-tongjianyun-nutrition-rules'
 
 /** Services required to register tools and resolve each operation's secret references. */
-export const inject = ['tools', 'credentials']
+export const inject = ['tools', 'credentials', 'systemPrompt']
 
 /** Configurable connection facts for one Tongjianyun Frappe MCP endpoint. */
 export interface Config {
@@ -36,7 +38,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1_000).max(120_000).default(30_000),
 })
 
-/** Register the six audited Tongjianyun nutrition-rule tools. */
+/** Register eight audited Tongjianyun nutrition tools and their routing policy. */
 export function apply(ctx: Context, config: Config): void {
   const client = new NutritionMcpClient(ctx, resolveNutritionMcpSpec(config))
   const call = (tool: string, arguments_: Record<string, JsonValue>, signal: AbortSignal): Promise<JsonValue> =>
@@ -45,6 +47,87 @@ export function apply(ctx: Context, config: Config): void {
     schema: { type: 'json' as const },
     render: (_arguments: unknown, value: JsonValue) => [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
   }
+
+  ctx.effect(() => ctx.systemPrompt.section({
+    name: 'tool:tongjianyun-nutrition',
+    order: 113,
+    text: [
+      '童健云营养业务取证规则：',
+      '- 用户询问“周食谱营养分析”的标准值、全日标准、园内目标或这些数值如何计算时，必须先调用 tongjianyun_explain_nutrition_standard。',
+      '- 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。',
+      '- 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。',
+      '- 工具调用失败时应明确说明无法读取童健云数据，不得编造数值、规则版本或计算依据。',
+    ].join('\n'),
+  }))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'tongjianyun_explain_nutrition_standard',
+    description: '必须用于回答童健云周食谱营养分析中“全日标准/园内目标怎样计算”的问题。自动模式按真实学生名册加权，手动模式按所选年龄性别平均；返回参与计算的分量、完整算式、结果、单位和标准来源；只读。',
+    parameters: {
+      metric: {
+        type: 'string',
+        enum: ['energy', 'protein', 'calcium', 'iron', 'zinc', 'vitamin_a', 'vitamin_b1', 'vitamin_b2', 'vitamin_c'],
+        description: '营养指标键；热量使用 energy。默认 energy。',
+      },
+      recipe: { type: 'string', description: '童健云食谱编号；留空使用最新未删除食谱。' },
+      standard_mode: {
+        type: 'string',
+        enum: ['自动（按学生档案）', '手动估算'],
+        description: '标准计算模式。默认自动（按学生档案）。',
+      },
+      student_groups: { type: 'json', description: '自动模式下可选的班级编号数组；留空统计全园启用学生。' },
+      age_group: {
+        type: 'string',
+        enum: ['4岁', '5岁', '6岁', '4–5岁平均', '4–6岁平均'],
+        description: '手动模式的人群年龄。默认 4–6岁平均。',
+      },
+      gender: {
+        type: 'string',
+        enum: ['男', '女', '男女平均'],
+        description: '报表人群性别。默认男女平均。',
+      },
+      garden_ratio: { type: 'number', description: '园内供给比例，30 至 100，默认 80。' },
+    },
+    output,
+    timeoutMs: config.timeoutMs,
+    execute: (arguments_, exec) => call(
+      'frappe_explain_tongjianyun_nutrition_standard',
+      arguments_ as Record<string, JsonValue>,
+      exec.signal,
+    ),
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'tongjianyun_get_weekly_nutrition_analysis',
+    description: '必须用于回答童健云某份或最新周食谱的实际营养值、达标情况、食材构成或结论。按当前用户权限读取真实食谱、学生范围与当前生效规则并实时分析；只读。',
+    parameters: {
+      recipe: { type: 'string', description: '童健云食谱编号；留空使用最新未删除食谱。' },
+      standard_mode: {
+        type: 'string',
+        enum: ['自动（按学生档案）', '手动估算'],
+        description: '标准计算模式。默认自动（按学生档案）。',
+      },
+      student_groups: { type: 'json', description: '自动模式下可选的班级编号数组；留空统计全园启用学生。' },
+      age_group: {
+        type: 'string',
+        enum: ['4岁', '5岁', '6岁', '4–5岁平均', '4–6岁平均'],
+        description: '手动模式的人群年龄。默认 4–6岁平均。',
+      },
+      gender: {
+        type: 'string',
+        enum: ['男', '女', '男女平均'],
+        description: '报表人群性别。默认男女平均。',
+      },
+      garden_ratio: { type: 'number', description: '园内供给比例，30 至 100，默认 80。' },
+    },
+    output,
+    timeoutMs: config.timeoutMs,
+    execute: (arguments_, exec) => call(
+      'frappe_get_tongjianyun_weekly_nutrition_analysis',
+      arguments_ as Record<string, JsonValue>,
+      exec.signal,
+    ),
+  })))
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'tongjianyun_list_nutrition_rules',
