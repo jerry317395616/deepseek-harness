@@ -472,4 +472,31 @@ describe('SettingsScopeBinder.bind', () => {
     await fiber.dispose()
     expect(describeCall).not.toHaveBeenCalled()
   })
+
+  it('binds an authenticated proxy browser to Host persistence when explicitly configured', async () => {
+    const describeCall = vi.fn().mockResolvedValue(described({ preference: 'dark' }, 1))
+    const wire = { settings: { describe: describeCall } }
+    const mirror = new SettingsDescribeMirror(wire as never, 'host')
+    const ctx = new Context()
+    ctx.provide('connection', { api: wire, isLoopback: false } as never)
+    let scope!: SettingsScope<UiTestSettings>
+    new TestRemote(ctx)
+    await ctx.plugin(SettingsScopeBinder, {
+      mirror,
+      schema: settingsSchema,
+      persistence: 'host',
+    }).await()
+    const fiber = ctx.plugin({
+      inject: ['connection', 'remote', 'settingsScope'],
+      apply: (plugin: Context) => {
+        scope = plugin.settingsScope.bind<UiTestSettings>({ namespace: 'ui-test' })
+      },
+    })
+    await fiber.await()
+    await vi.waitFor(() => {
+      expect(scope.getSnapshot()).toMatchObject({ status: 'ready', mode: 'host' })
+    })
+    expect(describeCall).toHaveBeenCalledOnce()
+    await fiber.dispose()
+  })
 })

@@ -160,7 +160,6 @@ describe('PluginsSettingsSection', () => {
     expect(configurable.getAttribute('aria-selected')).toBe('true')
   })
 })
-
 describe('ConfigurablePluginsTab', () => {
   it('says so when no plugin contributed a card', () => {
     renderConfigurable([], { bash: 'shell' })
@@ -354,10 +353,6 @@ describe('WebSearchCard', () => {
     const store = createSnapshotStore<WebSearchCardState>({
       ...settled,
       baseURL: field(''),
-      maxUses: field('5'),
-      apiKey: field(''),
-      apiKeyConfigured: false,
-      apiKeyWritable: true,
       ...state,
     })
     const actions = cardActions()
@@ -366,54 +361,26 @@ describe('WebSearchCard', () => {
     return actions
   }
 
-  it('reports whether a key is configured without ever showing one', () => {
-    renderWebSearch({ apiKeyConfigured: true })
-    fireEvent.click(screen.getByText(en.webSearchTitle))
-
-    expect(screen.getByText(en.webSearchApiKeySet)).toBeTruthy()
-    expect(screen.getByLabelText(en.webSearchApiKey)).toHaveProperty('type', 'password')
-  })
-
-  it('keeps the key control usable while the settings document is read-only', () => {
+  it('disables the endpoint while the settings document is read-only', () => {
     const actions = renderWebSearch({ writable: false })
     fireEvent.click(screen.getByText(en.webSearchTitle))
 
-    const key = screen.getByLabelText(en.webSearchApiKey)
-    expect(key).toHaveProperty('disabled', false)
     expect(screen.getByLabelText(en.webSearchBaseUrl)).toHaveProperty('disabled', true)
-
-    fireEvent.change(key, { target: { value: 'ds-secret' } })
-
-    expect(actions.edit).toHaveBeenCalledWith('apiKey', 'ds-secret')
+    expect(actions.edit).not.toHaveBeenCalled()
   })
 
-  it('disables the key control when the reference itself is not writable', () => {
-    // A key coming from the process environment: the settings document is
-    // writable, the credential is not.
-    renderWebSearch({ apiKeyConfigured: true, apiKeyWritable: false })
-    fireEvent.click(screen.getByText(en.webSearchTitle))
-
-    expect(screen.getByLabelText(en.webSearchApiKey)).toHaveProperty('disabled', true)
-    expect(screen.getByLabelText(en.webSearchBaseUrl)).toHaveProperty('disabled', false)
-  })
-
-  it('stages the endpoint, the search budget, and their resets', () => {
+  it('stages the endpoint and its reset', () => {
     const actions = renderWebSearch({
       baseURL: field('https://search.test/v1', { overridden: true }),
-      maxUses: field('3', { overridden: true }),
     })
     fireEvent.click(screen.getByText(en.webSearchTitle))
 
     fireEvent.change(screen.getByLabelText(en.webSearchBaseUrl), { target: { value: 'https://other.test' } })
-    fireEvent.change(screen.getByLabelText(en.webSearchMaxUses), { target: { value: '4' } })
     const resets = screen.getAllByRole('button', { name: en.reset })
-    expect(resets).toHaveLength(2)
+    expect(resets).toHaveLength(1)
     for (const reset of resets) fireEvent.click(reset)
 
-    expect(actions.edit.mock.calls).toEqual([
-      ['baseURL', 'https://other.test'],
-      ['maxUses', '4'],
-    ])
-    expect(actions.resetField.mock.calls).toEqual([['baseURL'], ['maxUses']])
+    expect(actions.edit.mock.calls).toEqual([['baseURL', 'https://other.test']])
+    expect(actions.resetField.mock.calls).toEqual([['baseURL']])
   })
 })

@@ -9,9 +9,6 @@
   ],
   "references": [
     {
-      "path": "../../util/launch-environment"
-    },
-    {
       "path": "../../../vendor/cordis"
     },
     {
@@ -22,6 +19,9 @@
     },
     {
       "path": "../web"
+    },
+    {
+      "path": "../../settings/settings"
     }
   ]
 }

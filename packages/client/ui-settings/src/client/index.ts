@@ -38,6 +38,23 @@ export type { SettingsDescribeFace, SettingsDescribeView, SettingsMirrorSnapshot
 export const inject = ['connection', 'remote']
 
 /**
+ * Select whether settings use the Host document or browser process memory.
+ * iONE's public entry point is protected by its Frappe-authenticated reverse
+ * proxy, which forwards trusted requests to the local Harness host. The
+ * build-time opt-in keeps ordinary remote Harness deployments process-local.
+ *
+ * @param isLoopback - whether the browser connected directly to the Host.
+ * @param trustedProxy - public build flag for an authenticated reverse proxy.
+ * @returns the settings persistence boundary for this client.
+ */
+export function settingsPersistence(
+  isLoopback: boolean,
+  trustedProxy = process.env.DSH_CLIENT_IONE_TRUSTED_SETTINGS === '1',
+): 'host' | 'memory' {
+  return isLoopback || trustedProxy ? 'host' : 'memory'
+}
+
+/**
  * Provide the settings-namespace scope service over one shared describe
  * mirror, and keep that mirror fresh on the two signals that can move the
  * settings document: a document commit and a (re)connect.
@@ -49,9 +66,10 @@ export const inject = ['connection', 'remote']
 export function apply(ctx: ClientContext): void {
   const schema = new SettingsSchemaService(ctx)
   const connection = ctx.get('connection') as ConnectionHandle
+  const persistence = settingsPersistence(connection.isLoopback)
   const mirror = new SettingsDescribeMirror(
     connection.api,
-    connection.isLoopback ? 'host' : 'memory',
+    persistence,
   )
   ctx.effect(() => {
     const disposers = [
@@ -65,5 +83,5 @@ export function apply(ctx: ClientContext): void {
     void mirror.ensure()
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-settings: describe mirror invalidations')
-  new SettingsScopeBinder(ctx, { mirror, schema })
+  new SettingsScopeBinder(ctx, { mirror, schema, persistence })
 }

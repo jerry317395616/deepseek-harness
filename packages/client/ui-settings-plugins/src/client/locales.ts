@@ -9,8 +9,7 @@ export type PluginsSettingsLocaleKey =
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
-  | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
-  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -42,17 +41,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallel: 'Parallel tool calls',
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   webSearchTitle: 'Web search',
-  webSearchDescription: 'The DeepSeek search provider.',
-  webSearchApiKey: 'API key',
-  webSearchApiKeyHint: 'Stored outside the settings file. Leave blank to keep the current key.',
-  webSearchApiKeySet: 'A key is configured.',
-  webSearchApiKeyUnset: 'No key is configured; search is unavailable until one is.',
+  webSearchDescription: 'Search through the deployment SearXNG service.',
   webSearchBaseUrl: 'Endpoint',
-  webSearchBaseUrlHint: 'Leave blank to use the provider default.',
-  webSearchMaxUses: 'Max searches per request',
-  webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  webSearchBaseUrlHint: 'Leave blank to use the local SearXNG service.',
 }
-
 /** Simplified Chinese copy. */
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
   nav: '插件',
@@ -83,13 +75,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallel: '并行工具调用数',
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   webSearchTitle: '网页搜索',
-  webSearchDescription: 'DeepSeek 搜索提供方。',
-  webSearchApiKey: 'API Key',
-  webSearchApiKeyHint: '不写入设置文件。留空表示保持当前密钥。',
-  webSearchApiKeySet: '已配置密钥。',
-  webSearchApiKeyUnset: '未配置密钥；配置之前搜索不可用。',
+  webSearchDescription: '通过本部署的 SearXNG 服务搜索网页。',
   webSearchBaseUrl: '接口地址',
-  webSearchBaseUrlHint: '留空则使用提供方默认地址。',
-  webSearchMaxUses: '单次请求最多搜索次数',
-  webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  webSearchBaseUrlHint: '留空则使用本机 SearXNG 服务。',
 }

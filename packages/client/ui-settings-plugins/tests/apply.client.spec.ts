@@ -26,7 +26,6 @@ async function bench(served?: string[]) {
   const locale = new LocaleRuntime(ctx)
   locale.setLocale('zh')
   ctx.provide('locale', locale)
-  const describeCredentials = vi.fn(() => Promise.resolve({ rpcId: 'c', result: { ok: false, error: {} } }))
   const describeSettings = vi.fn(() => Promise.resolve(served === undefined
     ? { rpcId: 's', result: { ok: false, error: {} } }
     : {
@@ -50,11 +49,10 @@ async function bench(served?: string[]) {
     isLoopback: true,
     api: {
       settings: { describe: describeSettings },
-      credentials: { describe: describeCredentials },
     },
   } as never)
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, describeCredentials, describeSettings }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, describeSettings }
 }
 
 function declareRoot(slots: SlotRegistry): () => void {
@@ -66,7 +64,7 @@ function declareRoot(slots: SlotRegistry): () => void {
 
 describe('ui-settings-plugins apply', () => {
   it('declares the services it uses', () => {
-    expect(inject).toEqual(['slots', 'locale', 'connection', 'remote', 'settingsScope'])
+    expect(inject).toEqual(['slots', 'locale', 'settingsScope'])
   })
 
   it('registers one Plugins section and declares the tab and card slots', async () => {
@@ -126,13 +124,13 @@ describe('ui-settings-plugins apply', () => {
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     expect(slots.entries('settings.plugin.item').map(entry => entry.options.key))
-      .toEqual(['shell', 'agent-loop', 'web-search-deepseek'])
+      .toEqual(['shell', 'agent-loop', 'web-search-searxng'])
   })
 
   it('dispatches the served namespaces its cards claim, and no others', async () => {
     // ui-theme is served but belongs to another surface, and a deployment
     // composing no PowerShell/POSIX executor serves no `bash` at all.
-    const { ctx, slots } = await bench(['agent-loop', 'ui-theme', 'web-search-deepseek'])
+    const { ctx, slots } = await bench(['agent-loop', 'ui-theme', 'web-search-searxng'])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
@@ -140,7 +138,7 @@ describe('ui-settings-plugins apply', () => {
     const face = (tab.inject as unknown as () => ConfigurablePluginsTabFace)()
     await vi.waitFor(() => {
       expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
-        .toEqual(['agent-loop', 'web-search-deepseek'])
+        .toEqual(['agent-loop', 'web-search-searxng'])
     })
   })
 
@@ -169,33 +167,6 @@ describe('ui-settings-plugins apply', () => {
     ctx.emit('connection/reset')
 
     await vi.waitFor(() => { expect(describeSettings).toHaveBeenCalled() })
-  })
-
-  it('re-reads the credential when the Host reports the watched reference changed', async () => {
-    const { ctx, slots, describeCredentials } = await bench()
-    declareRoot(slots)
-    await ctx.plugin({ inject: [...inject], apply }).await()
-    await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalled() })
-    describeCredentials.mockClear()
-
-    // A key written on another surface changes no settings section, so this
-    // event is the only thing that reaches the card.
-    ctx.remote.$dispatch('credentials/reference-updated', ['DEEPSEEK_API_KEY'])
-
-    await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalledTimes(1) })
-  })
-
-  it('ignores a credential change for a reference no card watches', async () => {
-    const { ctx, slots, describeCredentials } = await bench()
-    declareRoot(slots)
-    await ctx.plugin({ inject: [...inject], apply }).await()
-    await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalled() })
-    describeCredentials.mockClear()
-
-    ctx.remote.$dispatch('credentials/reference-updated', ['SOME_OTHER_KEY'])
-    await Promise.resolve()
-
-    expect(describeCredentials).not.toHaveBeenCalled()
   })
 
   it('registers into a declaration that arrives after apply', async () => {

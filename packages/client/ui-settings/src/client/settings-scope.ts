@@ -222,7 +222,6 @@ export class SettingsScopeController<T> implements SettingsScope<T> {
     return failure === undefined ? view.value as T : undefined
   }
 }
-
 declare module '@deepseek-ai/cordis' {
   interface Context {
     settingsScope: SettingsScopeBinder
@@ -239,16 +238,23 @@ declare module '@deepseek-ai/cordis' {
 export class SettingsScopeBinder extends Service {
   private readonly mirror: SettingsDescribeMirror
   private readonly schema: SettingsSchemaService
+  private readonly persistence: 'host' | 'memory'
 
   /**
    * @param ctx - the providing plugin's context.
    * @param config - the shared describe mirror every bound scope derives from,
-   * plus the settings-owned schema operations.
+   * settings-owned schema operations, and an optional trusted transport mode.
    */
-  constructor(ctx: Context, config: { mirror: SettingsDescribeMirror; schema: SettingsSchemaService }) {
+  constructor(ctx: Context, config: {
+    mirror: SettingsDescribeMirror
+    schema: SettingsSchemaService
+    persistence?: 'host' | 'memory'
+  }) {
     super(ctx, 'settingsScope')
     this.mirror = config.mirror
     this.schema = config.schema
+    const connection = ctx.get('connection') as ConnectionHandle
+    this.persistence = config.persistence ?? (connection.isLoopback ? 'host' : 'memory')
   }
 
   /**
@@ -279,7 +285,7 @@ export class SettingsScopeBinder extends Service {
       connection.api,
       spec,
       this.mirror,
-      connection.isLoopback ? 'host' : 'memory',
+      this.persistence,
       this.schema,
     )
     ctx.effect(() => {

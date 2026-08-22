@@ -30,4 +30,32 @@ describe('pnpm invocation', () => {
     expect(() => pnpmInvocation([], { npm_execpath: entrypoint }))
       .toThrow('npm_execpath is unavailable; invoke the script through pnpm run')
   })
+
+  it.each([
+    ['/tools/pnpm.cjs', process.execPath, ['/tools/pnpm.cjs']],
+    ['/tools/pnpm', '/tools/pnpm', []],
+  ] as const)('adds the reproducible offline install flags for %s', (entrypoint, command, prefix) => {
+    expect(pnpmInvocation(['install', '--frozen-lockfile'], {
+      npm_execpath: entrypoint,
+      DSH_PNPM_OFFLINE: '1',
+    })).toEqual({
+      command,
+      args: [
+        ...prefix,
+        '--offline',
+        '--store-dir=/tmp/pnpm-store',
+        '--trust-policy=off',
+        '--trust-lockfile',
+        'install',
+        '--frozen-lockfile',
+      ],
+    })
+  })
+
+  it('does not alter non-install commands in offline build mode', () => {
+    expect(pnpmInvocation(['run', 'build'], {
+      npm_execpath: '/tools/pnpm',
+      DSH_PNPM_OFFLINE: '1',
+    })).toEqual({ command: '/tools/pnpm', args: ['run', 'build'] })
+  })
 })

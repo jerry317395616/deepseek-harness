@@ -7,7 +7,7 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
-import { apply, inject } from '../src/client/index.ts'
+import { apply, inject, settingsPersistence } from '../src/client/index.ts'
 import { SettingsSchemaService } from '../src/client/schema.ts'
 import { SettingsScopeBinder } from '../src/client/settings-scope.ts'
 
@@ -27,6 +27,12 @@ function bench() {
 }
 
 describe('settings domain base plugin', () => {
+  it('uses Host persistence only for loopback or an explicitly trusted proxy build', () => {
+    expect(settingsPersistence(true, false)).toBe('host')
+    expect(settingsPersistence(false, true)).toBe('host')
+    expect(settingsPersistence(false, false)).toBe('memory')
+  })
+
   it('mounts the scope service under settingsScope and reads once eagerly', async () => {
     const { ctx, describeCall, fiber } = bench()
     await fiber.await()

@@ -14,8 +14,11 @@ export function pnpmInvocation(
   if (entrypoint === undefined || entrypoint === '') {
     throw new Error('pnpm invocation: npm_execpath is unavailable; invoke the script through pnpm run.')
   }
+  const offlineArgs = environment.DSH_PNPM_OFFLINE === '1' && args[0] === 'install'
+    ? ['--offline', '--store-dir=/tmp/pnpm-store', '--trust-policy=off', '--trust-lockfile']
+    : []
   if (/\.[cm]?js$/iu.test(entrypoint)) {
-    return { command: process.execPath, args: [entrypoint, ...args] }
+    return { command: process.execPath, args: [entrypoint, ...offlineArgs, ...args] }
   }
-  return { command: entrypoint, args: [...args] }
+  return { command: entrypoint, args: [...offlineArgs, ...args] }
 }

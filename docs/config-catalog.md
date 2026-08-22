@@ -3188,6 +3188,22 @@ export interface Config {
 
 Source: [`packages/web/web-search-perplexity/src/index.ts:32`](../packages/web/web-search-perplexity/src/index.ts)
 
+<a id="deepseek-aidsh-web-search-searxng"></a>
+
+## `@deepseek-ai/dsh-web-search-searxng`
+
+Requires: `web`
+
+```ts config-catalog
+/** Deployment settings for the SearXNG origin. */
+export interface Config {
+  /** SearXNG origin; `/search?q=…&format=json` is appended by the provider. */
+  baseURL?: string
+}
+```
+
+Source: [`packages/web/web-search-searxng/src/index.ts:29`](../packages/web/web-search-searxng/src/index.ts)
+
 <a id="deepseek-aidsh-workflow-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-workflow-worker-thread`
