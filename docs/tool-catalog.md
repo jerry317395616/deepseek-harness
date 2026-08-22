@@ -21,6 +21,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The bash tool is the model-facing consumer of the bash executor seam. A `run_in_background` run registers with the generic `ctx.jobs` runtime and is collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; the `enableRunInBackground` config (default true) removes the parameter entirely when disabled. |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The pwsh tool is the PowerShell-dialect consumer of the bash executor seam for Windows compositions (a PowerShell executor such as `@deepseek-ai/dsh-pwsh-local` backs `ctx.shell`); it mirrors the bash tool call-for-call minus sandbox controls — `run_in_background` runs register with the generic `ctx.jobs` runtime and are collected/stopped through the `job_*` tools, and the managed `DSH_*` environment comes from `@deepseek-ai/dsh-shell-env`. Each call runs in a fresh process (no persistent PTY session), with native `C:\...` paths and `$env:NAME` variables. |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`, `cordis_inspect_list`, `cordis_inspect_query`, `cordis_inspect_self`, `cordis_run`, `cordis_stop`, `cordis_undefine` | `ctx.tools`, `ctx.dynamicCordisRunner` | `tool/call`, `tool/result`, `process-local dynamic package lifecycle` | - | Not in any shipped tree (a deliberate opt-in — dynamic package code reaches the real runtime, see .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md). The toolset injects `ctx.dynamicCordisRunner` from `@deepseek-ai/dsh-cordis-host-runner`, which owns the definition registry and the vm sandbox; a composition missing it never activates the tools. A running package may register ADDITIONAL model-visible tools until it is stopped, undefined, or DSH restarts; a full changed request header logs those tool-set changes. |
+| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.credentials` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent pwsh tool, the Windows counterpart of the persistent bash tool; deployment composition supplies a pwsh-dialect PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
@@ -500,6 +501,175 @@ Permanently remove a dynamic Plugin owned by the current Session. If it is runni
 Source: [`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)
 
 Not in any shipped tree (a deliberate opt-in — dynamic package code reaches the real runtime, see .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md). The toolset injects `ctx.dynamicCordisRunner` from `@deepseek-ai/dsh-cordis-host-runner`, which owns the definition registry and the vm sandbox; a composition missing it never activates the tools. A running package may register ADDITIONAL model-visible tools until it is stopped, undefined, or DSH restarts; a full changed request header logs those tool-set changes.
+
+<a id="deepseek-aidsh-tool-tongjianyun-nutrition-rules"></a>
+
+## `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules`
+
+### `tongjianyun_create_nutrition_rule_draft`
+
+基于当前或指定版本创建周食谱营养计算规则草稿。草稿不会影响已发布报表；变更必须是结构化的公式、比例、阈值、供能系数或目标字段。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "规则草稿名称。"
+    },
+    "changes": {
+      "description": "结构化营养计算变更。"
+    },
+    "base_rule_set": {
+      "type": "string",
+      "description": "可选的基础规则编号；留空使用当前生效规则。"
+    },
+    "change_reason": {
+      "type": "string",
+      "description": "变更原因和业务依据。"
+    }
+  },
+  "required": [
+    "title",
+    "changes"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_list_nutrition_rules`
+
+列出童健云周食谱营养计算规则及当前生效版本。仅用于查询，不会修改任何计算。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "可选的规则状态筛选。",
+      "enum": [
+        "草稿",
+        "待审核",
+        "已发布",
+        "已停用"
+      ]
+    },
+    "limit": {
+      "type": "integer",
+      "description": "最多返回 1 至 100 条规则，默认 20。"
+    }
+  }
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_preview_nutrition_rule`
+
+用真实食谱试算候选营养规则，并与当前规则对比。试算不发布，也不会修改报表数据。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "rule_set": {
+      "type": "string",
+      "description": "待试算的营养规则编号。"
+    },
+    "recipe": {
+      "type": "string",
+      "description": "可选的食谱编号；留空使用最新食谱。"
+    }
+  },
+  "required": [
+    "rule_set"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_publish_nutrition_rule`
+
+发布已审核的营养规则。仅在用户在当前对话中明确确认后调用；confirmation 必须精确为“确认发布”。童健云后端会再次校验管理员权限和确认文本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "rule_set": {
+      "type": "string",
+      "description": "待发布的已审核规则编号。"
+    },
+    "confirmation": {
+      "type": "string",
+      "description": "必须精确填写“确认发布”。"
+    }
+  },
+  "required": [
+    "rule_set",
+    "confirmation"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_rollback_nutrition_rule`
+
+将历史营养规则复制为新版本并立即发布。仅在用户在当前对话中明确确认后调用；confirmation 必须精确为“确认回滚”。童健云后端会再次校验管理员权限和确认文本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "target_rule_set": {
+      "type": "string",
+      "description": "要恢复的历史规则编号。"
+    },
+    "confirmation": {
+      "type": "string",
+      "description": "必须精确填写“确认回滚”。"
+    },
+    "change_reason": {
+      "type": "string",
+      "description": "可选的回滚原因。"
+    }
+  },
+  "required": [
+    "target_rule_set",
+    "confirmation"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_submit_nutrition_rule`
+
+将已试算的营养规则草稿提交审核。此操作不会发布规则。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "rule_set": {
+      "type": "string",
+      "description": "待提交审核的草稿规则编号。"
+    }
+  },
+  "required": [
+    "rule_set"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

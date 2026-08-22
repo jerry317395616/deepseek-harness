@@ -25,6 +25,7 @@
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | bash 工具是 bash 执行器 seam 面向模型的消费方。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具（来自 `@deepseek-ai/dsh-tool-jobs`）收集／停止；禁用 `enableRunInBackground` 配置（默认为 true）后，该参数会被完全移除。 |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费方（由 `@deepseek-ai/dsh-pwsh-local` 等 PowerShell 执行器为 `ctx.shell` 提供后端）；除沙箱接口外，它逐项对应 bash 工具调用。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具收集／停止；托管的 `DSH_*` 环境来自 `@deepseek-ai/dsh-shell-env`。每次调用都在新进程中运行，不使用持久 PTY 会话。路径采用原生 `C:\...` 形式，变量采用 `$env:NAME`。 |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`、`cordis_inspect_list`、`cordis_inspect_query`、`cordis_inspect_self`、`cordis_run`、`cordis_stop`、`cordis_undefine` | `ctx.tools`、`ctx.dynamicCordisRunner` | `tool/call`、`tool/result`、`process-local dynamic package lifecycle` | - | 不在任何随产品发布的树中，需要显式选择启用；动态 Package 代码可以访问真实运行时，见 .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md。该工具集注入 `@deepseek-ai/dsh-cordis-host-runner` 提供的 `ctx.dynamicCordisRunner`，后者拥有定义注册表和 vm 沙箱；组合缺少它时这些工具不会激活。运行中的 Package 在停止、undefine 或 DSH 重启前可以注册**额外的**模型可见工具；发生这类工具集变化时，系统会记录完整且有变动的请求头。 |
+| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.credentials` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
@@ -504,6 +505,175 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 来源：[`packages/extensions/tool-cordis/src/index.ts`](../packages/extensions/tool-cordis/src/index.ts)
 
 不在任何随产品发布的树中，需要显式选择启用；动态 Package 代码可以访问真实运行时，见 .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md。该工具集注入 `@deepseek-ai/dsh-cordis-host-runner` 提供的 `ctx.dynamicCordisRunner`，后者拥有定义注册表和 vm 沙箱；组合缺少它时这些工具不会激活。运行中的 Package 在停止、undefine 或 DSH 重启前可以注册**额外的**模型可见工具；发生这类工具集变化时，系统会记录完整且有变动的请求头。
+
+<a id="deepseek-aidsh-tool-tongjianyun-nutrition-rules"></a>
+
+## `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules`
+
+### `tongjianyun_create_nutrition_rule_draft`
+
+基于当前或指定版本创建周食谱营养计算规则草稿。草稿不会影响已发布报表；变更必须是结构化的公式、比例、阈值、供能系数或目标字段。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "规则草稿名称。"
+    },
+    "changes": {
+      "description": "结构化营养计算变更。"
+    },
+    "base_rule_set": {
+      "type": "string",
+      "description": "可选的基础规则编号；留空使用当前生效规则。"
+    },
+    "change_reason": {
+      "type": "string",
+      "description": "变更原因和业务依据。"
+    }
+  },
+  "required": [
+    "title",
+    "changes"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_list_nutrition_rules`
+
+列出童健云周食谱营养计算规则及当前生效版本。仅用于查询，不会修改任何计算。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "string",
+      "description": "可选的规则状态筛选。",
+      "enum": [
+        "草稿",
+        "待审核",
+        "已发布",
+        "已停用"
+      ]
+    },
+    "limit": {
+      "type": "integer",
+      "description": "最多返回 1 至 100 条规则，默认 20。"
+    }
+  }
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_preview_nutrition_rule`
+
+用真实食谱试算候选营养规则，并与当前规则对比。试算不发布，也不会修改报表数据。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "rule_set": {
+      "type": "string",
+      "description": "待试算的营养规则编号。"
+    },
+    "recipe": {
+      "type": "string",
+      "description": "可选的食谱编号；留空使用最新食谱。"
+    }
+  },
+  "required": [
+    "rule_set"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_publish_nutrition_rule`
+
+发布已审核的营养规则。仅在用户在当前对话中明确确认后调用；confirmation 必须精确为“确认发布”。童健云后端会再次校验管理员权限和确认文本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "rule_set": {
+      "type": "string",
+      "description": "待发布的已审核规则编号。"
+    },
+    "confirmation": {
+      "type": "string",
+      "description": "必须精确填写“确认发布”。"
+    }
+  },
+  "required": [
+    "rule_set",
+    "confirmation"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_rollback_nutrition_rule`
+
+将历史营养规则复制为新版本并立即发布。仅在用户在当前对话中明确确认后调用；confirmation 必须精确为“确认回滚”。童健云后端会再次校验管理员权限和确认文本。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "target_rule_set": {
+      "type": "string",
+      "description": "要恢复的历史规则编号。"
+    },
+    "confirmation": {
+      "type": "string",
+      "description": "必须精确填写“确认回滚”。"
+    },
+    "change_reason": {
+      "type": "string",
+      "description": "可选的回滚原因。"
+    }
+  },
+  "required": [
+    "target_rule_set",
+    "confirmation"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+### `tongjianyun_submit_nutrition_rule`
+
+将已试算的营养规则草稿提交审核。此操作不会发布规则。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "rule_set": {
+      "type": "string",
+      "description": "待提交审核的草稿规则编号。"
+    }
+  },
+  "required": [
+    "rule_set"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
+可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

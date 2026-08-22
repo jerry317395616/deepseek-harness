@@ -7,6 +7,7 @@ Model-facing tools over the live cordis runtime the agent itself runs inside: in
 | Package | Role | ctx key |
 |---|---|---|
 | [`tool-cordis/`](tool-cordis/README.md) | Model-facing runtime inspection and dynamic-package tools | registers on `ctx.tools` |
+| [`tool-tongjianyun-nutrition-rules/`](tool-tongjianyun-nutrition-rules/README.md) | Authenticated Frappe MCP tools for the Tongjianyun nutrition-rule lifecycle | registers on `ctx.tools` |
 | [`cordis-host-runner/`](cordis-host-runner/README.md) | Definition registry, the `node:vm` sandbox for host halves, and the request-run round trip | provides `ctx.dynamicCordisRunner` |
 | [`cordis-client-runner/`](cordis-client-runner/README.md) | Browser half of a dual-half package: evaluates the definition into a live browser plugin and answers the run request | client face; provides the browser `ctx.dynamicCordisRunner` |
 | [`ui-cordis/`](ui-cordis/README.md) | Browser surfaces: the frame-wide panel that operates every definition, and the read-only define card | client face; registers slots |

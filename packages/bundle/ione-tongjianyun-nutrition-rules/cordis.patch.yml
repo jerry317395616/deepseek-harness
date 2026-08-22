@@ -1,0 +1,9 @@
+# Opt-in Tongjianyun nutrition-rule Bundle. The row stays disabled until a
+# deployment supplies its site endpoint and secret references through a later
+# profile or home patch. This prevents an installed Bundle from booting with a
+# guessed endpoint or a credential value in source control.
+
+- insert:
+    - id: tongjianyun-nutrition-rules
+      name: '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules'
+      disabled: true

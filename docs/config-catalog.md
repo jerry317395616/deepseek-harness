@@ -2909,6 +2909,28 @@ export interface Config {
 
 Source: [`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/src/index.ts)
 
+<a id="deepseek-aidsh-tool-tongjianyun-nutrition-rules"></a>
+
+## `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules`
+
+Requires: `tools` · `credentials`
+
+```ts config-catalog
+/** Configurable connection facts for one Tongjianyun Frappe MCP endpoint. */
+export interface Config {
+  /** Absolute Frappe method URL serving the MCP endpoint. */
+  endpoint: string
+  /** Credential reference whose value is a Frappe `api_key:api_secret` pair. */
+  credentialRef: string
+  /** Optional short-lived current-user identity reference supplied by trusted site infrastructure. */
+  actorTokenRef?: string
+  /** Per-operation timeout, applied by the Harness tool timeout policy. */
+  timeoutMs: number
+}
+```
+
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts:20`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
 <a id="deepseek-aidsh-tool-web"></a>
 
 ## `@deepseek-ai/dsh-tool-web`
@@ -3349,6 +3371,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-code-runtime-python` ([`packages/code-runtime/code-runtime-python/src/index.ts`](../packages/code-runtime/code-runtime-python/src/index.ts))
 - `@deepseek-ai/dsh-home-paths` ([`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts))
 - `@deepseek-ai/dsh-hook-protocol` ([`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts))
+- `@deepseek-ai/dsh-ione-tongjianyun-nutrition-rules` ([`packages/bundle/ione-tongjianyun-nutrition-rules/src/index.ts`](../packages/bundle/ione-tongjianyun-nutrition-rules/src/index.ts))
 - `@deepseek-ai/dsh-launch-environment` ([`packages/util/launch-environment/src/index.ts`](../packages/util/launch-environment/src/index.ts))
 - `@deepseek-ai/dsh-llm-mock-server` ([`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts))
 - `@deepseek-ai/dsh-loader-smoke` ([`packages/test-support/loader-smoke/src/index.ts`](../packages/test-support/loader-smoke/src/index.ts))

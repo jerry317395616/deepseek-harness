@@ -1,6 +1,6 @@
 # Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write docs/config-catalog.md
-config-catalog.md: 030b8d0ab199ccc9170b71a3412011f2ab8d108b
-config-catalog.zh.md: a603adad72743ee79bfd572ea272064435113925
+#   pnpm run verify-translation-pairing --write packages/extensions/tool-tongjianyun-nutrition-rules/README.md
+README.md: e1e2923d0fef066288bfb6d5e13a7d35fd3c5a8d
+README.zh.md: 4cd3959dafb65c2cc317da4baa20302ce448d7f8

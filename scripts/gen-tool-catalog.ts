@@ -27,6 +27,7 @@ import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentLimits, ImageAttachmentRef, SaveImageAttachment, StoredImageAttachment } from '@deepseek-ai/dsh-attachment'
 import UserQuestionService from '@deepseek-ai/dsh-user-questions'
+import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import PlanModeController from '@deepseek-ai/dsh-plan-mode'
 import WebRuntime from '@deepseek-ai/dsh-web'
 import * as WebSearchExa from '@deepseek-ai/dsh-web-search-exa'
@@ -46,6 +47,7 @@ import * as ToolBashPersistent from '@deepseek-ai/dsh-tool-bash-persistent'
 import * as ToolPwshPersistent from '@deepseek-ai/dsh-tool-pwsh-persistent'
 import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
+import * as ToolTongjianyunNutritionRules from '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
@@ -270,6 +272,26 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'Not in any shipped tree (a deliberate opt-in — dynamic package code reaches the real runtime, see .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md). The toolset injects `ctx.dynamicCordisRunner` from `@deepseek-ai/dsh-cordis-host-runner`, which owns the definition registry and the vm sandbox; a composition missing it never activates the tools. A running package may register ADDITIONAL model-visible tools until it is stopped, undefined, or DSH restarts; a full changed request header logs those tool-set changes.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules',
+    dir: 'tool-tongjianyun-nutrition-rules',
+    source: 'packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts',
+    requires: ['ctx.tools', 'ctx.credentials'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(LocalCredentialProvider, {
+        path: resolve(root, '.tmp/tool-catalog/tongjianyun-credentials.yaml'),
+        watch: false,
+      })
+      await ctx.plugin(ToolTongjianyunNutritionRules, {
+        endpoint: 'http://127.0.0.1:8000/api/method/ione_core.mcp.server.handle_mcp',
+        credentialRef: 'TONGJIANYUN_CATALOG_CREDENTIAL',
+        timeoutMs: 30_000,
+      })
+    },
+    note:
+      'The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',
