@@ -144,13 +144,14 @@ function execute(ctx: Context, call: string, name: string, arguments_: Record<st
 }
 
 describe('Tongjianyun nutrition-rule Loader composition', () => {
-  it('loads eight model-visible tools and routing guidance, resolves secrets at call time, and disposes both', async () => {
+  it('loads nine model-visible tools and routing guidance, resolves secrets at call time, and disposes both', async () => {
     const mock = await startFrappeMcp()
     const ctx = await loadComposition(mock.endpoint)
 
     expect(ctx.tools.schemas().map(tool => tool.name)).toMatchInlineSnapshot(`
       [
         "tongjianyun_explain_nutrition_standard",
+        "tongjianyun_compare_age_group_nutrition_standards",
         "tongjianyun_get_weekly_nutrition_analysis",
         "tongjianyun_list_nutrition_rules",
         "tongjianyun_create_nutrition_rule_draft",
@@ -160,6 +161,23 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
         "tongjianyun_rollback_nutrition_rule",
       ]
     `)
+
+    const comparison = await execute(ctx, 'compare-ages', 'tongjianyun_compare_age_group_nutrition_standards', {
+      metric: 'energy',
+      gender: '男女平均',
+      garden_ratio: 80,
+    })
+    expect(comparison).toMatchObject({
+      isError: false,
+      value: {
+        comparison_mode: '手动估算·各年龄组',
+        age_groups: [
+          { operation: 'frappe_explain_tongjianyun_nutrition_standard' },
+          { operation: 'frappe_explain_tongjianyun_nutrition_standard' },
+          { operation: 'frappe_explain_tongjianyun_nutrition_standard' },
+        ],
+      },
+    })
 
     const cases: Array<[string, string, Record<string, unknown>]> = [
       ['explain-standard', 'tongjianyun_explain_nutrition_standard', { metric: 'energy', standard_mode: '自动（按学生档案）' }],
@@ -178,6 +196,9 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
 
     expect(mock.requests.map(request => request.body.params.name)).toEqual([
       'frappe_explain_tongjianyun_nutrition_standard',
+      'frappe_explain_tongjianyun_nutrition_standard',
+      'frappe_explain_tongjianyun_nutrition_standard',
+      'frappe_explain_tongjianyun_nutrition_standard',
       'frappe_get_tongjianyun_weekly_nutrition_analysis',
       'frappe_list_tongjianyun_nutrition_rules',
       'frappe_create_tongjianyun_nutrition_rule_draft',
@@ -185,6 +206,16 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
       'frappe_submit_tongjianyun_nutrition_rule',
       'frappe_publish_tongjianyun_nutrition_rule',
       'frappe_rollback_tongjianyun_nutrition_rule',
+    ])
+    expect(mock.requests.slice(0, 3).map(request => request.body.params.arguments.age_group)).toEqual([
+      '4岁',
+      '5岁',
+      '6岁',
+    ])
+    expect(mock.requests.slice(0, 3).map(request => request.body.params.arguments.standard_mode)).toEqual([
+      '手动估算',
+      '手动估算',
+      '手动估算',
     ])
     for (const request of mock.requests) {
       expect(request.authorization).toBe('token test-key:test-secret')
@@ -196,6 +227,7 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
       section => section.name === 'tool:tongjianyun-nutrition',
     )?.text).toMatchInlineSnapshot(`
       "童健云营养业务取证规则：
+      - 用户询问“各年龄组”“不同年龄组”或要求按年龄对比营养参考值时，必须调用 tongjianyun_compare_age_group_nutrition_standards，一次读取4岁、5岁、6岁全部标准。
       - 用户询问“周食谱营养分析”的标准值、全日标准、园内目标或这些数值如何计算时，必须先调用 tongjianyun_explain_nutrition_standard。
       - 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。
       - 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。

@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-本包为童健云周食谱营养业务提供八个原生 Harness 工具。两个只读工具基于童健云真实数据解释按学生名册加权或手动选择的全日标准，并计算最新或指定食谱；另外六个受控工具覆盖营养规则生命周期：查询规则、创建草稿、试算草稿、提交审核、发布已审核规则，以及把历史规则恢复为一个新的已发布版本。它直接调用童健云已认证的 Frappe MCP 方法；MCP 凭据和可选的当前用户断言不会出现在模型可见的工具结构或结果中。
+本包为童健云周食谱营养业务提供九个原生 Harness 工具。三个只读工具分别解释单项标准、一次对比4岁/5岁/6岁全部标准，以及基于真实数据计算最新或指定食谱；另外六个受控工具覆盖营养规则生命周期：查询规则、创建草稿、试算草稿、提交审核、发布已审核规则，以及把历史规则恢复为一个新的已发布版本。它直接调用童健云已认证的 Frappe MCP 方法；MCP 凭据和可选的当前用户断言不会出现在模型可见的工具结构或结果中。
 
 请通过 Profile 或 Bundle 补丁配置本包。`credentialRef` 指向凭据库中的 Frappe 集成账号，值为 `api_key:api_secret`。`actorTokenRef` 可选，指向每次调用都会解析的、由受信任身份系统签发的当前用户断言；仅在童健云服务器启用该校验时配置。`timeoutMs` 由 Harness 的工具超时策略执行。
 
@@ -24,7 +24,7 @@ Frappe 集成账号仍受童健云服务端角色权限、审计记录、规则�
 
 #### What the model sees
 
-八个工具结构列在生成的[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-tongjianyun-nutrition-rules)中。工具结果仅包含 Frappe 返回的结构化结果；API 凭据、HTTP 请求头、接口地址和可选的用户断言均不会进入模型上下文。固定路由区段会告诉模型何时使用 `tongjianyun_explain_nutrition_standard` 或 `tongjianyun_get_weekly_nutrition_analysis`。
+九个工具结构列在生成的[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-tongjianyun-nutrition-rules)中。工具结果仅包含 Frappe 返回的结构化结果；API 凭据、HTTP 请求头、接口地址和可选的用户断言均不会进入模型上下文。固定路由区段会告诉模型何时对比全部年龄组、解释单项标准或计算周食谱。
 
 #### Token effect
 

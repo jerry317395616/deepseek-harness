@@ -38,7 +38,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1_000).max(120_000).default(30_000),
 })
 
-/** Register eight audited Tongjianyun nutrition tools and their routing policy. */
+/** Register nine audited Tongjianyun nutrition tools and their routing policy. */
 export function apply(ctx: Context, config: Config): void {
   const client = new NutritionMcpClient(ctx, resolveNutritionMcpSpec(config))
   const call = (tool: string, arguments_: Record<string, JsonValue>, signal: AbortSignal): Promise<JsonValue> =>
@@ -53,6 +53,7 @@ export function apply(ctx: Context, config: Config): void {
     order: 113,
     text: [
       '童健云营养业务取证规则：',
+      '- 用户询问“各年龄组”“不同年龄组”或要求按年龄对比营养参考值时，必须调用 tongjianyun_compare_age_group_nutrition_standards，一次读取4岁、5岁、6岁全部标准。',
       '- 用户询问“周食谱营养分析”的标准值、全日标准、园内目标或这些数值如何计算时，必须先调用 tongjianyun_explain_nutrition_standard。',
       '- 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。',
       '- 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。',
@@ -95,6 +96,40 @@ export function apply(ctx: Context, config: Config): void {
       arguments_ as Record<string, JsonValue>,
       exec.signal,
     ),
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'tongjianyun_compare_age_group_nutrition_standards',
+    description: '必须用于回答童健云“各年龄组/不同年龄组”的营养参考值对比。一次读取4岁、5岁、6岁三个年龄组的男、女参考值、男女平均全日标准、园内目标、完整算式和标准来源；只读。',
+    parameters: {
+      metric: {
+        type: 'string',
+        enum: ['energy', 'protein', 'calcium', 'iron', 'zinc', 'vitamin_a', 'vitamin_b1', 'vitamin_b2', 'vitamin_c'],
+        description: '营养指标键；热量使用 energy。默认 energy。',
+      },
+      recipe: { type: 'string', description: '童健云食谱编号；留空使用最新未删除食谱。' },
+      gender: {
+        type: 'string',
+        enum: ['男', '女', '男女平均'],
+        description: '对比使用的性别口径。默认男女平均。',
+      },
+      garden_ratio: { type: 'number', description: '园内供给比例，30 至 100，默认 80。' },
+    },
+    output,
+    timeoutMs: config.timeoutMs,
+    execute: async (arguments_, exec) => {
+      const shared = arguments_ as Record<string, JsonValue>
+      const ageGroups = ['4岁', '5岁', '6岁'] as const
+      const results = await Promise.all(ageGroups.map(age_group => call(
+        'frappe_explain_tongjianyun_nutrition_standard',
+        { ...shared, standard_mode: '手动估算', age_group },
+        exec.signal,
+      )))
+      return {
+        comparison_mode: '手动估算·各年龄组',
+        age_groups: results,
+      }
+    },
   })))
 
   ctx.effect(() => ctx.tools.register(defineTool({
