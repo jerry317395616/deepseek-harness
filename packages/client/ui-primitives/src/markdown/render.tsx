@@ -52,6 +52,33 @@ function sanitizeUrl(url: string): string {
   }
 }
 
+/**
+ * Turn a loopback artifact URL emitted by an agent into the authenticated
+ * remote download route.  Agents sometimes start a temporary local HTTP
+ * server for generated reports; that address points at the end user's own
+ * computer when the Harness UI is opened through the public gateway.  Only
+ * known document formats are rewritten, and only while the page itself is
+ * running on a non-loopback origin, so ordinary localhost/API links remain
+ * untouched in local development and tests.
+ */
+function remoteArtifactUrl(url: string): string {
+  if (typeof window === 'undefined') return url
+  try {
+    const destination = new URL(url)
+    if (destination.protocol !== 'http:' && destination.protocol !== 'https:') return url
+    if (destination.hostname !== '127.0.0.1' && destination.hostname !== 'localhost') return url
+    if (!/\.(?:docx|doc|xlsx|xls|pdf|csv|txt|zip|pptx|ppt|odt|ods)$/iu.test(destination.pathname)) return url
+
+    const page = new URL(window.location.href)
+    if (page.hostname === '127.0.0.1' || page.hostname === 'localhost') return url
+
+    const artifactPath = destination.pathname.replace(/^\/+/u, '')
+    return new URL(`/downloads/${artifactPath}${destination.search}${destination.hash}`, page.origin).href
+  } catch {
+    return url
+  }
+}
+
 function remoteImageUrl(url: string): string | undefined {
   try {
     const protocol = new URL(url).protocol
@@ -455,7 +482,7 @@ function renderTableRow(
 
 /** Anchor over an already-authored href: allowlisted or unwrapped, external links get the safe attributes. */
 function renderSafeLink(href: string, children: ReactNode[], key: Key): ReactNode {
-  const safeHref = sanitizeUrl(href)
+  const safeHref = sanitizeUrl(remoteArtifactUrl(href))
   if (safeHref === '') return <Fragment key={key}>{children}</Fragment>
   const external = ['http:', 'https:'].includes(new URL(safeHref).protocol)
   return (
