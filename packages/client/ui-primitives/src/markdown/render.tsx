@@ -79,6 +79,20 @@ function remoteArtifactUrl(url: string): string {
   }
 }
 
+const REMOTE_ARTIFACT_TEXT_RE = /https?:\/\/(?:127\.0\.0\.1|localhost)(?::\d+)?\/[^\s<>"'`]+/giu
+
+/** Rewrite loopback artifact URLs embedded in prose, code, or fenced output. */
+function remoteArtifactText(value: string): string {
+  return value.replace(REMOTE_ARTIFACT_TEXT_RE, (raw) => {
+    // Markdown prose often places punctuation immediately after a URL. Keep
+    // that punctuation outside the URL so the artifact extension still matches.
+    const trailingMatch = /[),.;:!?。，；！？、]+$/u.exec(raw)
+    const trailing = trailingMatch?.[0] ?? ''
+    const candidate = trailing === '' ? raw : raw.slice(0, -trailing.length)
+    return `${remoteArtifactUrl(candidate)}${trailing}`
+  })
+}
+
 function remoteImageUrl(url: string): string | undefined {
   try {
     const protocol = new URL(url).protocol
@@ -235,7 +249,7 @@ function renderChildren(
 function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderContext): ReactNode {
   switch (node.type) {
     case 'text':
-      return node.value
+      return remoteArtifactText(node.value)
     case 'paragraph':
       return <p key={key}>{renderChildren(node.children, context)}</p>
     case 'heading':
@@ -262,7 +276,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
       return <del key={key}>{renderChildren(node.children, context)}</del>
     case 'inlineCode': {
       // Parity with mdast-util-to-hast: inline code renders line endings as spaces.
-      const value = node.value.replace(/\r?\n|\r/g, ' ')
+      const value = remoteArtifactText(node.value.replace(/\r?\n|\r/g, ' '))
       // An inline-code token that is entirely an absolute HTTP(S) URL keeps
       // its code chrome and gains the same safe external anchor as a link;
       // commands, partial URLs, and other schemes stay inert. The value is
@@ -293,7 +307,7 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
     }
     case 'html':
       // No HTML parser enters the pipeline: raw HTML stays literal text.
-      return node.value
+      return remoteArtifactText(node.value)
     case 'code':
       return renderCode(node, key, context)
     case 'math':
@@ -332,7 +346,8 @@ function renderNode(node: Md.RootContent, key: Key, context: MarkdownRenderConte
 
 function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): ReactNode {
   const language = node.lang ?? undefined
-  if (node.value === '') {
+  const codeValue = remoteArtifactText(node.value)
+  if (codeValue === '') {
     // Parity: the replaced pipeline kept the stock <pre> for an empty fence.
     return (
       <pre key={key}>
@@ -354,7 +369,7 @@ function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): Re
       // The replaced hast pipeline appended one synthetic newline that
       // CodeBlock's display trim removes; feeding the bare value would make
       // that trim eat a REAL trailing blank line inside the fence instead.
-      code={`${node.value}\n`}
+      code={`${codeValue}\n`}
       lang={context.streaming ? undefined : lang}
       copyLabel={context.codeLabels?.copyLabel}
       copiedLabel={context.codeLabels?.copiedLabel}
