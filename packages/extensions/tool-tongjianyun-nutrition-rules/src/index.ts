@@ -4,6 +4,8 @@
  * @module @deepseek-ai/dsh-tool-tongjianyun-nutrition-rules
  */
 
+import { chmod, copyFile, mkdir, realpath, stat } from 'node:fs/promises'
+import { basename, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
@@ -17,6 +19,12 @@ export const name = 'tool-tongjianyun-nutrition-rules'
 
 /** Services required to register tools and resolve each operation's secret references. */
 export const inject = ['tools', 'credentials', 'systemPrompt']
+
+/** The host directory exposed by the authenticated Harness download route. */
+const PUBLIC_DOWNLOAD_ROOT = '/home/zyd/frappe-direct/.harness-public'
+
+/** Model-readable source roots for generated Tongjianyun artifacts. */
+const ARTIFACT_SOURCE_ROOTS = ['/home/frappe', '/workspace', '/home/zyd/frappe-direct']
 
 /** Configurable connection facts for one Tongjianyun Frappe MCP endpoint. */
 export interface Config {
@@ -68,6 +76,8 @@ export function apply(ctx: Context, config: Config): void {
       '- 用户询问“各年龄组”“不同年龄组”或要求按年龄对比营养参考值时，必须调用 tongjianyun_compare_age_group_nutrition_standards，一次读取4岁、5岁、6岁全部标准。',
       '- 用户询问“周食谱营养分析”的标准值、全日标准、园内目标或这些数值如何计算时，必须先调用 tongjianyun_explain_nutrition_standard。',
       '- 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。',
+      '- 用户要求生成 Word、Excel、PDF 或其他可下载报告时，生成文件后必须调用 tongjianyun_publish_report；只有拿到工具返回的 url 后才能回复。',
+      '- 发布报告时必须使用工具返回的外网 url 作为 Markdown 下载链接；不得回复 /home/frappe、/workspace、file://、127.0.0.1 或 localhost 路径。',
       '- 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。',
       '- 工具调用失败时应明确说明无法读取童健云数据，不得编造数值、规则版本或计算依据。',
     ].join('\n'),
@@ -108,6 +118,27 @@ export function apply(ctx: Context, config: Config): void {
       arguments_ as Record<string, JsonValue>,
       exec.signal,
     ),
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'tongjianyun_publish_report',
+    description: '将刚生成的 Word/Excel/PDF/CSV 等报告发布到当前 Harness 的认证下载区，并返回可直接点击的外网 Markdown URL。用户要求下载文件时必须调用；仅允许发布 /home/frappe、/workspace 或 /home/zyd/frappe-direct 下的普通文件。',
+    parameters: {
+      file_path: {
+        type: 'string',
+        required: true,
+        description: '已生成文件的绝对路径，例如 /home/frappe/周食谱营养分析报告.docx。',
+      },
+      download_name: {
+        type: 'string',
+        description: '可选的下载文件名；留空使用源文件名。不得包含目录分隔符。',
+      },
+    },
+    output,
+    execute: async arguments_ => publishReport({
+      filePath: arguments_.file_path,
+      downloadName: arguments_.download_name,
+    }),
   })))
 
   ctx.effect(() => ctx.tools.register(defineTool({
@@ -264,4 +295,54 @@ export function apply(ctx: Context, config: Config): void {
 function assertRuleLimit(limit: number | undefined): void {
   if (limit === undefined || (limit >= 1 && limit <= 100)) return
   throw new Error('limit 必须是 1 至 100 之间的整数')
+}
+
+/**
+ * Publish one generated artifact to the authenticated reverse-proxy download
+ * directory. The source is resolved before copying so a symlink cannot escape
+ * the deployment-owned workspace roots.
+ */
+async function publishReport({
+  filePath,
+  downloadName,
+}: {
+  filePath: unknown
+  downloadName: unknown
+}): Promise<JsonValue> {
+  if (typeof filePath !== 'string' || filePath.trim() === '') {
+    throw new Error('file_path 必须是已生成文件的绝对路径')
+  }
+  const source = await realpath(filePath.trim())
+  const sourceInfo = await stat(source)
+  if (!sourceInfo.isFile()) throw new Error('file_path 必须指向普通文件')
+  if (!ARTIFACT_SOURCE_ROOTS.some(root => isWithin(source, resolve(root)))) {
+    throw new Error('只能发布 /home/frappe、/workspace 或 /home/zyd/frappe-direct 下的文件')
+  }
+
+  const requestedName = downloadName === undefined || downloadName === null
+    ? basename(source)
+    : String(downloadName).trim()
+  if (requestedName === '' || requestedName === '.' || requestedName === '..'
+    || requestedName.includes('/') || requestedName.includes('\\')) {
+    throw new Error('download_name 必须是不含目录分隔符的文件名')
+  }
+
+  await mkdir(PUBLIC_DOWNLOAD_ROOT, { recursive: true })
+  const publicRoot = await realpath(PUBLIC_DOWNLOAD_ROOT)
+  const destination = resolve(publicRoot, requestedName)
+  if (!isWithin(destination, publicRoot)) throw new Error('download_name 超出公开下载目录')
+  if (source !== destination) await copyFile(source, destination)
+  await chmod(destination, 0o644)
+  const publishedInfo = await stat(destination)
+  return {
+    file_path: source,
+    download_name: requestedName,
+    size_bytes: publishedInfo.size,
+    url: `https://harness.myyr.top/downloads/${encodeURIComponent(requestedName)}`,
+  }
+}
+
+/** Test a resolved path against a directory without prefix collisions. */
+function isWithin(candidate: string, root: string): boolean {
+  return candidate === root || candidate.startsWith(`${root}${sep}`)
 }

@@ -155,13 +155,14 @@ function execute(ctx: Context, call: string, name: string, arguments_: Record<st
 }
 
 describe('Tongjianyun nutrition-rule Loader composition', () => {
-  it('loads nine model-visible tools and routing guidance, resolves secrets at call time, and disposes both', async () => {
+  it('loads ten model-visible tools and routing guidance, resolves secrets at call time, and disposes both', async () => {
     const mock = await startFrappeMcp()
     const ctx = await loadComposition(mock.endpoint)
 
     expect(ctx.tools.schemas().map(tool => tool.name)).toMatchInlineSnapshot(`
       [
         "tongjianyun_explain_nutrition_standard",
+        "tongjianyun_publish_report",
         "tongjianyun_compare_age_group_nutrition_standards",
         "tongjianyun_get_weekly_nutrition_analysis",
         "tongjianyun_list_nutrition_rules",
@@ -241,6 +242,8 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
       - 用户询问“各年龄组”“不同年龄组”或要求按年龄对比营养参考值时，必须调用 tongjianyun_compare_age_group_nutrition_standards，一次读取4岁、5岁、6岁全部标准。
       - 用户询问“周食谱营养分析”的标准值、全日标准、园内目标或这些数值如何计算时，必须先调用 tongjianyun_explain_nutrition_standard。
       - 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。
+      - 用户要求生成 Word、Excel、PDF 或其他可下载报告时，生成文件后必须调用 tongjianyun_publish_report；只有拿到工具返回的 url 后才能回复。
+      - 发布报告时必须使用工具返回的外网 url 作为 Markdown 下载链接；不得回复 /home/frappe、/workspace、file://、127.0.0.1 或 localhost 路径。
       - 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。
       - 工具调用失败时应明确说明无法读取童健云数据，不得编造数值、规则版本或计算依据。"
     `)
