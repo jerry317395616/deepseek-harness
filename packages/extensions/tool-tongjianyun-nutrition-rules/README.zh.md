@@ -4,7 +4,7 @@
 
 本包为童健云周食谱营养业务提供九个原生 Harness 工具。三个只读工具分别解释单项标准、一次对比4岁/5岁/6岁全部标准，以及基于真实数据计算最新或指定食谱；另外六个受控工具覆盖营养规则生命周期：查询规则、创建草稿、试算草稿、提交审核、发布已审核规则，以及把历史规则恢复为一个新的已发布版本。它直接调用童健云已认证的 Frappe MCP 方法；MCP 凭据和可选的当前用户断言不会出现在模型可见的工具结构或结果中。
 
-请通过 Profile 或 Bundle 补丁配置本包。`credentialRef` 指向凭据库中的 Frappe 集成账号，值为 `api_key:api_secret`。`actorTokenRef` 可选，指向每次调用都会解析的、由受信任身份系统签发的当前用户断言；仅在童健云服务器启用该校验时配置。`timeoutMs` 由 Harness 的工具超时策略执行。
+请通过 Profile 或 Bundle 补丁配置本包。`credentialRef` 指向凭据库中的 Frappe 集成账号，值为 `api_key:api_secret`。如果童健云站点启用了用户断言校验，建议使用下面的动态身份配置：`identitySecretRef` 指向站点身份签名密钥，`identityEmail`、`identityUserHint` 和 `identityAudience` 描述专用 Frappe 账号。插件会为每次请求生成新的短期断言，不在凭据库中保存会过期的用户令牌。`actorTokenRef` 仍作为兼容选项，适用于已有受信任轮换断言的部署。`timeoutMs` 由 Harness 的工具超时策略执行。
 
 ```yaml
 - id: tongjianyun-nutrition-rules
@@ -12,9 +12,14 @@
   config:
     endpoint: https://child.myyr.top/api/method/ione_core.mcp.server.handle_mcp
     credentialRef: IONE_TONGJIANYUN_MCP_TOKEN
-    actorTokenRef: IONE_TONGJIANYUN_ACTOR_TOKEN
+    identitySecretRef: IONE_TONGJIANYUN_IDENTITY_SECRET
+    identityEmail: ione-harness-integration@child.myyr.top
+    identityUserHint: ione-harness-integration@child.myyr.top
+    identityAudience: child.myyr.top
     timeoutMs: 30000
 ```
+
+身份签名密钥只在插件内部解析，不会进入模型可见的结构、工具结果、日志消息或 HTTP 请求头。请将 Frappe 集成账号保持为启用的专用服务用户，并在服务端为其授予所需角色；插件不会绕过 Frappe 权限或 MCP 拒绝列表。
 
 Frappe 集成账号仍受童健云服务端角色权限、审计记录、规则状态流转以及精确确认文本的约束：发布为 `确认发布`，回滚为 `确认回滚`。本插件会在请求前校验确认文本，服务端会再次校验。稳定的系统提示区段要求模型先调用只读取证工具，再回答童健云标准或真实食谱结果的问题；如果 Frappe 调用失败，模型必须说明证据不可用，不得编造计算过程。
 
@@ -36,5 +41,5 @@ Frappe 集成账号仍受童健云服务端角色权限、审计记录、规则�
 
 ## Known Limitations and Deferred Work
 
-- **受信任的用户断言来源** — `actorTokenRef` 只能读取为当前 Harness 用户提供新鲜断言的凭据提供方。不支持静态长期用户令牌；启用用户身份校验的部署需要一个能够刷新该引用的受信任身份桥接层。
+- **身份密钥保管** — 动态断言要求将 Frappe 站点身份签名密钥放入受保护的 Harness 凭据库，并与站点身份配置一起轮换。`actorTokenRef` 仅保留给已经能够在每次调用签发新断言的受信任提供方；不支持静态长期用户令牌。
 - **Frappe 结果边界** — 规则列表和试算结果的分页及载荷限制由服务端负责。本插件保留结构化结果，不另行设置第二套截断策略。

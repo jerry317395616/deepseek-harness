@@ -1,15 +1,23 @@
 /** Typed Frappe-MCP transport used by the Tongjianyun nutrition-rule tools. */
 
+import { createHmac } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
+
+const ACTOR_TOKEN_PREFIX = 'ione1'
+const ACTOR_TOKEN_TTL_SECONDS = 600
 
 /** Fully resolved transport configuration, validated before tools register. */
 export interface NutritionMcpSpec {
   endpoint: URL
   credentialRef: CredentialRef
   actorTokenRef?: CredentialRef
+  identitySecretRef?: CredentialRef
+  identityEmail?: string
+  identityUserHint?: string
+  identityAudience: string
 }
 
 /**
@@ -22,6 +30,10 @@ export function resolveNutritionMcpSpec(config: {
   endpoint: string
   credentialRef: string
   actorTokenRef?: string
+  identitySecretRef?: string
+  identityEmail?: string
+  identityUserHint?: string
+  identityAudience?: string
 }): NutritionMcpSpec {
   let endpoint: URL
   try {
@@ -32,10 +44,23 @@ export function resolveNutritionMcpSpec(config: {
   if (endpoint.protocol !== 'https:' && endpoint.protocol !== 'http:') {
     throw new Error('tongjianyun-nutrition-rules: endpoint must use HTTP or HTTPS')
   }
+  const identitySecretRef = config.identitySecretRef?.trim()
+  const identityEmail = config.identityEmail?.trim()
+  if ((identitySecretRef === undefined) !== (identityEmail === undefined)) {
+    throw new Error('tongjianyun-nutrition-rules: identitySecretRef and identityEmail must be configured together')
+  }
   return {
     endpoint,
     credentialRef: credentialRef(config.credentialRef),
     ...(config.actorTokenRef === undefined ? {} : { actorTokenRef: credentialRef(config.actorTokenRef) }),
+    ...(identitySecretRef === undefined || identityEmail === undefined
+      ? {}
+      : {
+        identitySecretRef: credentialRef(identitySecretRef),
+        identityEmail,
+        ...(config.identityUserHint === undefined ? {} : { identityUserHint: config.identityUserHint }),
+      }),
+    identityAudience: config.identityAudience?.trim().toLowerCase() || endpoint.hostname.toLowerCase(),
   }
 }
 
@@ -58,9 +83,7 @@ export class NutritionMcpClient {
    */
   async call(tool: string, arguments_: Record<string, JsonValue>, signal: AbortSignal): Promise<JsonValue> {
     const authorization = await this.resolveCredential(this.spec.credentialRef, 'MCP credential')
-    const actorToken = this.spec.actorTokenRef === undefined
-      ? undefined
-      : await this.resolveCredential(this.spec.actorTokenRef, 'current-user identity token')
+    const actorToken = await this.resolveActorToken()
     const body = {
       jsonrpc: '2.0',
       id: ++this.nextRequestId,
@@ -107,6 +130,50 @@ export class NutritionMcpClient {
       `tongjianyun-nutrition-rules: ${label} ${String(ref)} is not configured; set it in the Harness credential store`,
     )
   }
+
+  /** Mint a fresh short-lived actor assertion so it cannot expire in the credential store. */
+  private async resolveActorToken(): Promise<string | undefined> {
+    if (this.spec.identitySecretRef !== undefined && this.spec.identityEmail !== undefined) {
+      const secret = await this.resolveCredential(this.spec.identitySecretRef, 'identity signing secret')
+      return issueActorToken({
+        email: this.spec.identityEmail,
+        audience: this.spec.identityAudience,
+        secret,
+        ...(this.spec.identityUserHint === undefined ? {} : { userHint: this.spec.identityUserHint }),
+      })
+    }
+    if (this.spec.actorTokenRef === undefined) return undefined
+    return this.resolveCredential(this.spec.actorTokenRef, 'current-user identity token')
+  }
+}
+
+/** Issue the same bounded HMAC assertion format as the I-ONE Agent bridge. */
+function issueActorToken({
+  email,
+  userHint,
+  audience,
+  secret,
+}: {
+  email: string
+  userHint?: string
+  audience: string
+  secret: string
+}): string {
+  if (secret.length < 32) throw new Error('tongjianyun-nutrition-rules: identity signing secret is not configured')
+  const issuedAt = Math.floor(Date.now() / 1000)
+  const payload = {
+    aud: audience,
+    email,
+    exp: issuedAt + ACTOR_TOKEN_TTL_SECONDS,
+    iat: issuedAt,
+    iss: 'ione-agent',
+    user: userHint ?? '',
+    v: 1,
+  }
+  const segment = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url')
+  const signed = `${ACTOR_TOKEN_PREFIX}.${segment}`
+  const signature = createHmac('sha256', secret).update(signed, 'ascii').digest('base64url')
+  return `${signed}.${signature}`
 }
 
 /** Read a JSON response while preserving abort semantics. */

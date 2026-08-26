@@ -5,6 +5,7 @@
  */
 
 import { createServer } from 'node:http'
+import { createHmac } from 'node:crypto'
 import type { Server } from 'node:http'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -31,6 +32,8 @@ interface FrappeRequest {
     }
   }
 }
+
+const testIdentitySecret = 'test-identity-secret-with-at-least-32-bytes'
 
 let root: string | undefined
 let context: Context | undefined
@@ -76,7 +79,7 @@ async function startFrappeMcp(): Promise<{ endpoint: string; requests: FrappeReq
 }
 
 /** Boot the real tool composition from a temporary cordis.yml. */
-async function loadComposition(endpoint: string): Promise<Context> {
+async function loadComposition(endpoint: string, options: { dynamicIdentity?: boolean } = {}): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-tongjianyun-nutrition-tools-'))
   const credentialsPath = join(root, '.credentials.yaml')
   await writeFile(credentialsPath, [
@@ -84,6 +87,7 @@ async function loadComposition(endpoint: string): Promise<Context> {
     'refs:',
     '  TONGJIANYUN_MCP_TOKEN: test-key:test-secret',
     '  TONGJIANYUN_ACTOR_TOKEN: test-actor-token',
+    ...(options.dynamicIdentity ? [`  TONGJIANYUN_IDENTITY_SECRET: ${testIdentitySecret}`] : []),
     '',
   ].join('\n'), { mode: 0o600 })
   const configPath = join(root, 'cordis.yml')
@@ -102,7 +106,14 @@ async function loadComposition(endpoint: string): Promise<Context> {
     '  config:',
     `    endpoint: ${JSON.stringify(endpoint)}`,
     '    credentialRef: TONGJIANYUN_MCP_TOKEN',
-    '    actorTokenRef: TONGJIANYUN_ACTOR_TOKEN',
+    ...(options.dynamicIdentity
+      ? [
+        '    identitySecretRef: TONGJIANYUN_IDENTITY_SECRET',
+        '    identityEmail: ione-harness-integration@child.myyr.top',
+        '    identityUserHint: ione-harness-integration@child.myyr.top',
+        '    identityAudience: child.myyr.top',
+      ]
+      : ['    actorTokenRef: TONGJIANYUN_ACTOR_TOKEN']),
     '    timeoutMs: 5000',
     '',
   ].join('\n'))
@@ -241,6 +252,41 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
     expect((await ctx.systemPrompt.assemble()).sections.some(
       section => section.name === 'tool:tongjianyun-nutrition',
     )).toBe(false)
+  })
+
+  it('mints a bounded HMAC actor assertion from the protected identity secret', async () => {
+    const mock = await startFrappeMcp()
+    const ctx = await loadComposition(mock.endpoint, { dynamicIdentity: true })
+
+    const result = await execute(ctx, 'dynamic-identity', 'tongjianyun_explain_nutrition_standard', {
+      metric: 'energy',
+      standard_mode: '手动估算',
+      age_group: '4岁',
+      gender: '男女平均',
+    })
+    expect(result).toMatchObject({ isError: false })
+
+    const actorToken = mock.requests[0]?.body.params.arguments.actor_token
+    expect(typeof actorToken).toBe('string')
+    const tokenParts = String(actorToken).split('.')
+    if (tokenParts.length !== 3) throw new Error('dynamic actor assertion has an invalid shape')
+    const prefix = tokenParts[0]
+    const segment = tokenParts[1]
+    const signature = tokenParts[2]
+    if (prefix === undefined || segment === undefined || signature === undefined) {
+      throw new Error('dynamic actor assertion has an invalid shape')
+    }
+    expect(prefix).toBe('ione1')
+    expect(signature).toBe(createHmac('sha256', testIdentitySecret).update(`${prefix}.${segment}`, 'ascii').digest('base64url'))
+    const payload = JSON.parse(Buffer.from(segment, 'base64url').toString('utf8')) as Record<string, unknown>
+    expect(payload).toMatchObject({
+      aud: 'child.myyr.top',
+      email: 'ione-harness-integration@child.myyr.top',
+      iss: 'ione-agent',
+      user: 'ione-harness-integration@child.myyr.top',
+      v: 1,
+    })
+    expect(payload.exp).toBe((payload.iat as number) + 600)
   })
 
   it('rejects destructive operations before transport unless the exact confirmation is present', async () => {

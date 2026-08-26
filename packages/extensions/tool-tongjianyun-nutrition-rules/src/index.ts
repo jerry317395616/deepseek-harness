@@ -26,6 +26,14 @@ export interface Config {
   credentialRef: string
   /** Optional short-lived current-user identity reference supplied by trusted site infrastructure. */
   actorTokenRef?: string
+  /** Credential reference for the Frappe/I-ONE identity signing secret. */
+  identitySecretRef?: string
+  /** Frappe account email represented by freshly minted actor assertions. */
+  identityEmail?: string
+  /** Optional Frappe username/name hint for resolving the identity email. */
+  identityUserHint?: string
+  /** Site audience for actor assertions; defaults to the endpoint hostname. */
+  identityAudience?: string
   /** Per-operation timeout, applied by the Harness tool timeout policy. */
   timeoutMs: number
 }
@@ -35,6 +43,10 @@ export const Config: z<Config> = z.object({
   endpoint: z.string().required(),
   credentialRef: z.string().required(),
   actorTokenRef: z.string(),
+  identitySecretRef: z.string(),
+  identityEmail: z.string(),
+  identityUserHint: z.string(),
+  identityAudience: z.string(),
   timeoutMs: z.number().step(1).min(1_000).max(120_000).default(30_000),
 })
 

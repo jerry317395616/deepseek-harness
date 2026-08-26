@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Registers nine native Harness tools for Tongjianyun weekly-menu nutrition. Three read-only tools explain one standard, compare the 4-, 5-, and 6-year-old standards in one operation, and calculate the latest or selected recipe from real Tongjianyun data. Six controlled tools cover the nutrition-rule lifecycle: inspect rules, create a draft, preview a draft, submit it for review, publish an approved rule, and roll a historical rule forward as a new published version. The package calls Tongjianyun's authenticated Frappe MCP method directly; it does not expose the MCP credential or optional current-user assertion in a model-visible schema or tool result.
 
-Configure the package through a profile or Bundle patch. `credentialRef` names a credential-store value containing the Frappe integration account in `api_key:api_secret` form. `actorTokenRef` is optional and names a trusted, rotating current-user assertion resolved for every call; enable it only when the Tongjianyun server is configured to require it. `timeoutMs` is enforced by the Harness tool-timeout policy.
+Configure the package through a profile or Bundle patch. `credentialRef` names a credential-store value containing the Frappe integration account in `api_key:api_secret` form. For a Tongjianyun site that enforces actor assertions, prefer the dynamic identity configuration below: `identitySecretRef` points to the site identity-signing secret, while `identityEmail`, `identityUserHint`, and `identityAudience` describe the dedicated Frappe account. The plugin mints a fresh short-lived assertion for each request, so no expiring actor token is stored. `actorTokenRef` remains a legacy fallback for deployments that already provide a trusted rotating assertion. `timeoutMs` is enforced by the Harness tool-timeout policy.
 
 ```yaml
 - id: tongjianyun-nutrition-rules
@@ -12,9 +12,14 @@ Configure the package through a profile or Bundle patch. `credentialRef` names a
   config:
     endpoint: https://child.myyr.top/api/method/ione_core.mcp.server.handle_mcp
     credentialRef: IONE_TONGJIANYUN_MCP_TOKEN
-    actorTokenRef: IONE_TONGJIANYUN_ACTOR_TOKEN
+    identitySecretRef: IONE_TONGJIANYUN_IDENTITY_SECRET
+    identityEmail: ione-harness-integration@child.myyr.top
+    identityUserHint: ione-harness-integration@child.myyr.top
+    identityAudience: child.myyr.top
     timeoutMs: 30000
 ```
+
+The identity-signing secret is resolved only inside the plugin and is never included in a model-visible schema, tool result, log message, or HTTP header. Keep the Frappe integration account enabled as a dedicated service user and grant the required server-side roles there; the plugin does not bypass Frappe permissions or the MCP deny list.
 
 The Frappe integration account remains subject to Tongjianyun's server-side role checks, audit trail, rule state transitions, and the exact publish (`确认发布`) or rollback (`确认回滚`) confirmation. The plugin checks the destructive confirmation before sending the request; the server checks it again. A stable system-prompt section requires the model to use the read-only evidence tools before answering questions about Tongjianyun standards or actual recipe results. If the Frappe call fails, the model is instructed to report the missing evidence instead of inventing a calculation.
 
@@ -36,5 +41,5 @@ The schemas remain prefix-stable for a mounted plugin configuration. Mounting, u
 
 ## Known Limitations and Deferred Work
 
-- **Trusted user assertion source** — `actorTokenRef` can only consume a credential provider that supplies a fresh assertion for the active Harness user. A static long-lived user token is not supported; deployments that enable actor enforcement need a trusted identity bridge that refreshes this reference.
+- **Identity secret custody** — dynamic assertions require the Frappe site's identity-signing secret in the protected Harness credential store. Rotate the secret together with the site's identity configuration. `actorTokenRef` is retained only for trusted providers that already issue a fresh assertion per call; static long-lived user tokens are not supported.
 - **Frappe result bounds** — the server owns pagination and payload limits for rule lists and previews. This plugin preserves the structured result and does not invent a second truncation policy.

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/tool-tongjianyun-nutrition-rules/README.md
-README.md: 893c6d537a4152df876daf9ee536a07ccdb45d5f
-README.zh.md: 011d1c793191093baf6a5f5c175384924cbc5277
+README.md: 541ad8159048b48765407266642182094466211b
+README.zh.md: 16e5a66f6666dc333ea070b92b0ab45080217031
