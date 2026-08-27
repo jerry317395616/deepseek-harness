@@ -6,8 +6,8 @@
  * `.agents/notes/implemented/process/2026-07-02-tool-schema-catalog.md`.
  */
 
-import { globSync, readFileSync, writeFileSync } from 'node:fs'
-import { basename, resolve } from 'node:path'
+import { globSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { basename, join, resolve } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import type { ToolSchema } from '@deepseek-ai/dsh-llm'
 import AgentRegistry from '@deepseek-ai/dsh-agent'
@@ -48,6 +48,7 @@ import * as ToolPwshPersistent from '@deepseek-ai/dsh-tool-pwsh-persistent'
 import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 import * as ToolTongjianyunNutritionRules from '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules'
+import * as ToolNativeBenchSource from '@deepseek-ai/dsh-tool-native-bench-source'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
@@ -292,6 +293,24 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference. A fixed routing section requires read-only evidence calls for Tongjianyun standard and actual-recipe questions; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-native-bench-source',
+    dir: 'tool-native-bench-source',
+    source: 'packages/extensions/tool-native-bench-source/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.subprocess', 'ctx.fs'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      const benchRoot = resolve(root, '.tmp/tool-catalog/native-bench')
+      mkdirSync(join(benchRoot, 'apps'), { recursive: true })
+      mkdirSync(join(benchRoot, 'sites'), { recursive: true })
+      mkdirSync(join(benchRoot, 'config'), { recursive: true })
+      await ctx.plugin(LocalFileSystem, { cwd: benchRoot })
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(ToolNativeBenchSource, { benchRoot })
+    },
+    note:
+      'The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',

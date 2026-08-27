@@ -26,6 +26,7 @@
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费方（由 `@deepseek-ai/dsh-pwsh-local` 等 PowerShell 执行器为 `ctx.shell` 提供后端）；除沙箱接口外，它逐项对应 bash 工具调用。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具收集／停止；托管的 `DSH_*` 环境来自 `@deepseek-ai/dsh-shell-env`。每次调用都在新进程中运行，不使用持久 PTY 会话。路径采用原生 `C:\...` 形式，变量采用 `$env:NAME`。 |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`、`cordis_inspect_list`、`cordis_inspect_query`、`cordis_inspect_self`、`cordis_run`、`cordis_stop`、`cordis_undefine` | `ctx.tools`、`ctx.dynamicCordisRunner` | `tool/call`、`tool/result`、`process-local dynamic package lifecycle` | - | 不在任何随产品发布的树中，需要显式选择启用；动态 Package 代码可以访问真实运行时，见 .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md。该工具集注入 `@deepseek-ai/dsh-cordis-host-runner` 提供的 `ctx.dynamicCordisRunner`，后者拥有定义注册表和 vm 沙箱；组合缺少它时这些工具不会激活。运行中的 Package 在停止、undefine 或 DSH 重启前可以注册**额外的**模型可见工具；发生这类工具集变化时，系统会记录完整且有变动的请求头。 |
 | `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`、`tongjianyun_explain_nutrition_standard`、`tongjianyun_get_weekly_nutrition_analysis`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.credentials`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它。固定路由区段要求涉及童健云标准和真实食谱的问题先调用只读取证工具；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
+| `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`、`native_bench_runtime_status`、`native_bench_search_code` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.fs` | `tool/call`、`tool/result` | - | 这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 `/home/zyd/frappe/native-bench`。 |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
@@ -510,6 +511,52 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 ## `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules`
 
+### `tongjianyun_compare_age_group_nutrition_standards`
+
+必须用于回答童健云“各年龄组/不同年龄组”的营养参考值对比。一次读取4岁、5岁、6岁三个年龄组的男、女参考值、男女平均全日标准、园内目标、完整算式和标准来源；只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "metric": {
+      "type": "string",
+      "description": "营养指标键；热量使用 energy。默认 energy。",
+      "enum": [
+        "energy",
+        "protein",
+        "calcium",
+        "iron",
+        "zinc",
+        "vitamin_a",
+        "vitamin_b1",
+        "vitamin_b2",
+        "vitamin_c"
+      ]
+    },
+    "recipe": {
+      "type": "string",
+      "description": "童健云食谱编号；留空使用最新未删除食谱。"
+    },
+    "gender": {
+      "type": "string",
+      "description": "对比使用的性别口径。默认男女平均。",
+      "enum": [
+        "男",
+        "女",
+        "男女平均"
+      ]
+    },
+    "garden_ratio": {
+      "type": "number",
+      "description": "园内供给比例，30 至 100，默认 80。"
+    }
+  }
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
 ### `tongjianyun_create_nutrition_rule_draft`
 
 基于当前或指定版本创建周食谱营养计算规则草稿。草稿不会影响已发布报表；变更必须是结构化的公式、比例、阈值、供能系数或目标字段。
@@ -743,6 +790,31 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
+### `tongjianyun_publish_report`
+
+将刚生成的 Word/Excel/PDF/CSV 等报告发布到当前 Harness 的认证下载区，并返回可直接点击的外网 Markdown URL。用户要求下载文件时必须调用；仅允许发布 Native Bench、/home/frappe、/workspace 或 /home/zyd/frappe-direct 下的普通文件。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "file_path": {
+      "type": "string",
+      "description": "已生成文件的绝对路径，例如 /home/frappe/周食谱营养分析报告.docx。"
+    },
+    "download_name": {
+      "type": "string",
+      "description": "可选的下载文件名；留空使用源文件名。不得包含目录分隔符。"
+    }
+  },
+  "required": [
+    "file_path"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+
 ### `tongjianyun_rollback_nutrition_rule`
 
 将历史营养规则复制为新版本并立即发布。仅在用户在当前对话中明确确认后调用；confirmation 必须精确为“确认回滚”。童健云后端会再次校验管理员权限和确认文本。
@@ -795,6 +867,83 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 来源：[`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
 可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它。固定路由区段要求涉及童健云标准和真实食谱的问题先调用只读取证工具；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。
+
+<a id="deepseek-aidsh-tool-native-bench-source"></a>
+
+## `@deepseek-ai/dsh-tool-native-bench-source`
+
+### `native_bench_read_file`
+
+读取当前 Native Bench apps、sites 或 config 中的源码和配置文件，返回带行号的有限范围。禁止读取环境密钥、日志和数据库密码。只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "path": {
+      "type": "string",
+      "description": "相对于 /home/zyd/frappe/native-bench 的路径，例如 apps/tongjianyun/tongjianyun/nutrition_standard_service.py。"
+    },
+    "start_line": {
+      "type": "integer",
+      "description": "起始行号，默认从第1行开始。"
+    },
+    "end_line": {
+      "type": "integer",
+      "description": "结束行号，默认最多读取500行。"
+    }
+  },
+  "required": [
+    "path"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
+### `native_bench_runtime_status`
+
+读取当前 Native Bench 的安全运行清单，包括 Bench 路径、默认站点、已安装应用和端口；不会返回密钥或数据库密码。只读。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
+### `native_bench_search_code`
+
+在当前运行的 /home/zyd/frappe/native-bench/apps 中搜索源码。返回文件路径、行号和匹配行；必须用于分析童健云业务逻辑，支持中文关键词。只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "要搜索的文字或中文关键词。按字面匹配。"
+    },
+    "app": {
+      "type": "string",
+      "description": "可选应用目录名，例如 tongjianyun、ione_core 或 education。"
+    },
+    "include": {
+      "type": "string",
+      "description": "可选的单个文件 glob，例如 *.py 或 *.json。"
+    }
+  },
+  "required": [
+    "query"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
+这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 /home/zyd/frappe/native-bench。
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

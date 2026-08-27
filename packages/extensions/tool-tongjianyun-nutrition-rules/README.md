@@ -23,6 +23,8 @@ The identity-signing secret is resolved only inside the plugin and is never incl
 
 The Frappe integration account remains subject to Tongjianyun's server-side role checks, audit trail, rule state transitions, and the exact publish (`确认发布`) or rollback (`确认回滚`) confirmation. The plugin checks the destructive confirmation before sending the request; the server checks it again. A stable system-prompt section requires the model to use the read-only evidence tools before answering questions about Tongjianyun standards or actual recipe results. If the Frappe call fails, the model is instructed to report the missing evidence instead of inventing a calculation.
 
+Generated reports may be selected from the active Native Bench at `/home/zyd/frappe/native-bench` in addition to the legacy report roots. Source-code analysis itself is provided by the separate Native Bench source package; this package remains the permission-aware database and report bridge.
+
 ## Model Experience
 
 ### Nutrition-rule tool schemas

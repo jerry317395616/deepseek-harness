@@ -24,7 +24,7 @@ export const inject = ['tools', 'credentials', 'systemPrompt']
 const PUBLIC_DOWNLOAD_ROOT = '/home/zyd/frappe-direct/.harness-public'
 
 /** Model-readable source roots for generated Tongjianyun artifacts. */
-const ARTIFACT_SOURCE_ROOTS = ['/home/frappe', '/workspace', '/home/zyd/frappe-direct']
+const ARTIFACT_SOURCE_ROOTS = ['/home/zyd/frappe/native-bench', '/home/frappe', '/workspace', '/home/zyd/frappe-direct']
 
 /** Configurable connection facts for one Tongjianyun Frappe MCP endpoint. */
 export interface Config {
@@ -78,7 +78,7 @@ export function apply(ctx: Context, config: Config): void {
       '- 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。',
       '- 用户要求生成 Word、Excel、PDF 或其他可下载报告时，生成文件后必须调用 tongjianyun_publish_report；只有拿到工具返回的 url 后才能回复。',
       '- 发布报告时必须使用工具返回的外网 url 作为 Markdown 下载链接；不得回复 /home/frappe、/workspace、file://、127.0.0.1 或 localhost 路径。',
-      '- 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。',
+      '- 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；源码问题先搜索 /home/zyd/frappe/native-bench/apps，再调用营养 MCP，不要凭通用营养知识猜测童健云的实现。',
       '- 工具调用失败时应明确说明无法读取童健云数据，不得编造数值、规则版本或计算依据。',
     ].join('\n'),
   }))
@@ -122,7 +122,7 @@ export function apply(ctx: Context, config: Config): void {
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'tongjianyun_publish_report',
-    description: '将刚生成的 Word/Excel/PDF/CSV 等报告发布到当前 Harness 的认证下载区，并返回可直接点击的外网 Markdown URL。用户要求下载文件时必须调用；仅允许发布 /home/frappe、/workspace 或 /home/zyd/frappe-direct 下的普通文件。',
+    description: '将刚生成的 Word/Excel/PDF/CSV 等报告发布到当前 Harness 的认证下载区，并返回可直接点击的外网 Markdown URL。用户要求下载文件时必须调用；仅允许发布 Native Bench、/home/frappe、/workspace 或 /home/zyd/frappe-direct 下的普通文件。',
     parameters: {
       file_path: {
         type: 'string',

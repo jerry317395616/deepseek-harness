@@ -1,0 +1,7 @@
+# Opt-in Native Bench source evidence Bundle. The profile layer supplies the
+# deployment-owned benchRoot and enables the tool row after installation.
+
+- insert:
+    - id: native-bench-source
+      name: '@deepseek-ai/dsh-tool-native-bench-source'
+      disabled: true
