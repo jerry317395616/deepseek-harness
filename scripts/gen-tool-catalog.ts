@@ -49,6 +49,7 @@ import CordisHostRunner from '@deepseek-ai/dsh-cordis-host-runner'
 import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 import * as ToolTongjianyunNutritionRules from '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules'
 import * as ToolNativeBenchSource from '@deepseek-ai/dsh-tool-native-bench-source'
+import * as ToolNativeBenchFrappe from '@deepseek-ai/dsh-tool-native-bench-frappe'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
@@ -278,21 +279,23 @@ const TOOL_PACKAGES: ToolPackage[] = [
     pkg: '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules',
     dir: 'tool-tongjianyun-nutrition-rules',
     source: 'packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts',
-    requires: ['ctx.tools', 'ctx.credentials', 'ctx.systemPrompt'],
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.subprocess', 'ctx.credentials (MCP compatibility mode only)'],
     writes: ['tool/call', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(LocalCredentialProvider, {
         path: resolve(root, '.tmp/tool-catalog/tongjianyun-credentials.yaml'),
         watch: false,
       })
+      await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(ToolTongjianyunNutritionRules, {
+        transport: 'mcp',
         endpoint: 'http://127.0.0.1:8000/api/method/ione_core.mcp.server.handle_mcp',
         credentialRef: 'TONGJIANYUN_CATALOG_CREDENTIAL',
         timeoutMs: 30_000,
       })
     },
     note:
-      'The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference. A fixed routing section requires read-only evidence calls for Tongjianyun standard and actual-recipe questions; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.',
+      'The optional Bundle inserts this tool row disabled. Native deployments run the three read-only nutrition operations directly in the configured Bench Python/Frappe context and keep MCP as an explicit compatibility mode for writes; the latter requires an authenticated endpoint and credential reference. A fixed routing section requires source evidence before current data, while publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-native-bench-source',
@@ -311,6 +314,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-native-bench-frappe',
+    dir: 'tool-native-bench-frappe',
+    source: 'packages/extensions/tool-native-bench-frappe/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.subprocess'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(ToolNativeBenchFrappe, {
+        benchRoot: resolve(root, '.tmp/tool-catalog/native-bench'),
+        timeoutMs: 30_000,
+      })
+    },
+    note:
+      'The optional Bundle inserts this tool row disabled. Native deployments expose bounded, permission-aware Frappe ORM list/get reads for permitted DocTypes in the configured Bench. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL or Python.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',

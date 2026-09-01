@@ -21,8 +21,9 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The bash tool is the model-facing consumer of the bash executor seam. A `run_in_background` run registers with the generic `ctx.jobs` runtime and is collected/stopped through the `job_*` tools from `@deepseek-ai/dsh-tool-jobs`; the `enableRunInBackground` config (default true) removes the parameter entirely when disabled. |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The pwsh tool is the PowerShell-dialect consumer of the bash executor seam for Windows compositions (a PowerShell executor such as `@deepseek-ai/dsh-pwsh-local` backs `ctx.shell`); it mirrors the bash tool call-for-call minus sandbox controls — `run_in_background` runs register with the generic `ctx.jobs` runtime and are collected/stopped through the `job_*` tools, and the managed `DSH_*` environment comes from `@deepseek-ai/dsh-shell-env`. Each call runs in a fresh process (no persistent PTY session), with native `C:\...` paths and `$env:NAME` variables. |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`, `cordis_inspect_list`, `cordis_inspect_query`, `cordis_inspect_self`, `cordis_run`, `cordis_stop`, `cordis_undefine` | `ctx.tools`, `ctx.dynamicCordisRunner` | `tool/call`, `tool/result`, `process-local dynamic package lifecycle` | - | Not in any shipped tree (a deliberate opt-in — dynamic package code reaches the real runtime, see .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md). The toolset injects `ctx.dynamicCordisRunner` from `@deepseek-ai/dsh-cordis-host-runner`, which owns the definition registry and the vm sandbox; a composition missing it never activates the tools. A running package may register ADDITIONAL model-visible tools until it is stopped, undefined, or DSH restarts; a full changed request header logs those tool-set changes. |
-| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`, `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_explain_nutrition_standard`, `tongjianyun_get_weekly_nutrition_analysis`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_publish_report`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.credentials`, `ctx.systemPrompt` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference. A fixed routing section requires read-only evidence calls for Tongjianyun standard and actual-recipe questions; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
+| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`, `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_explain_nutrition_standard`, `tongjianyun_get_weekly_nutrition_analysis`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_publish_report`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.credentials (MCP compatibility mode only)` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments run the three read-only nutrition operations directly in the configured Bench Python/Frappe context and keep MCP as an explicit compatibility mode for writes; the latter requires an authenticated endpoint and credential reference. A fixed routing section requires source evidence before current data, while publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
 | `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`, `native_bench_runtime_status`, `native_bench_search_code` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.fs` | `tool/call`, `tool/result` | - | The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench. |
+| `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_get_document`, `native_bench_frappe_list_documents` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments expose bounded, permission-aware Frappe ORM list/get reads for permitted DocTypes in the configured Bench. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL or Python. |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent pwsh tool, the Windows counterpart of the persistent bash tool; deployment composition supplies a pwsh-dialect PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
@@ -862,7 +863,7 @@ Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](..
 
 Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
-The optional Bundle inserts this tool row disabled. A deployment enables it only after it supplies its authenticated Frappe MCP endpoint and credential reference. A fixed routing section requires read-only evidence calls for Tongjianyun standard and actual-recipe questions; publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.
+The optional Bundle inserts this tool row disabled. Native deployments run the three read-only nutrition operations directly in the configured Bench Python/Frappe context and keep MCP as an explicit compatibility mode for writes; the latter requires an authenticated endpoint and credential reference. A fixed routing section requires source evidence before current data, while publish and rollback require exact user confirmations and the Frappe server enforces the same controls again.
 
 <a id="deepseek-aidsh-tool-native-bench-source"></a>
 
@@ -912,7 +913,7 @@ Source: [`packages/extensions/tool-native-bench-source/src/index.ts`](../package
 
 ### `native_bench_search_code`
 
-在当前运行的 /home/zyd/frappe/native-bench/apps 中搜索源码。返回文件路径、行号和匹配行；必须用于分析童健云业务逻辑，支持中文关键词。只读。
+在当前运行的 /home/zyd/frappe/native-bench/apps 中搜索所有应用源码。返回文件路径、行号和匹配行；支持中文关键词。只读。
 
 ```json
 {
@@ -940,6 +941,80 @@ Source: [`packages/extensions/tool-native-bench-source/src/index.ts`](../package
 Source: [`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
 
 The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench.
+
+<a id="deepseek-aidsh-tool-native-bench-frappe"></a>
+
+## `@deepseek-ai/dsh-tool-native-bench-frappe`
+
+### `native_bench_frappe_get_document`
+
+在当前 Native Bench 的 Frappe 站点中按权限读取一个允许的 DocType 记录。支持字段选择和敏感字段脱敏；禁止任意 SQL，只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doctype": {
+      "type": "string",
+      "description": "Frappe DocType 名称。"
+    },
+    "name": {
+      "type": "string",
+      "description": "记录名称或编号。"
+    },
+    "fields": {
+      "description": "可选字段名数组，最多64个；留空只返回 name。"
+    }
+  },
+  "required": [
+    "doctype",
+    "name"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+### `native_bench_frappe_list_documents`
+
+在当前 Native Bench 的 Frappe 站点中按权限查询任意允许的 DocType 列表。支持结构化过滤、排序、分页和字段选择；禁止任意 SQL，敏感字段自动脱敏，只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doctype": {
+      "type": "string",
+      "description": "Frappe DocType 名称，例如 Student、Class 或 Course。"
+    },
+    "fields": {
+      "description": "可选字段名数组，最多64个；留空只返回 name。"
+    },
+    "filters": {
+      "description": "可选过滤对象或 [字段, 运算符, 值] 条件数组；不接受 SQL。"
+    },
+    "order_by": {
+      "type": "string",
+      "description": "可选单字段排序，例如 modified desc。"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "返回行数，1至100，默认20。"
+    },
+    "start": {
+      "type": "integer",
+      "description": "分页起点，0至100000，默认0。"
+    }
+  },
+  "required": [
+    "doctype"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+The optional Bundle inserts this tool row disabled. Native deployments expose bounded, permission-aware Frappe ORM list/get reads for permitted DocTypes in the configured Bench. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL or Python.
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

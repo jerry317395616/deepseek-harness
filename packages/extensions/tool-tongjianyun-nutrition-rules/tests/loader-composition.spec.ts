@@ -1,7 +1,8 @@
 /**
  * Real-composition guard for the Tongjianyun nutrition-rule tools: a Loader
  * boots the actual tool and credential plugins from cordis.yml, then a local
- * Frappe-MCP stand-in receives the authenticated JSON-RPC calls.
+ * Frappe-MCP stand-in receives the authenticated JSON-RPC calls in explicit
+ * compatibility mode.
  */
 
 import { createServer } from 'node:http'
@@ -19,6 +20,7 @@ import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
 import { CallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
 import * as NutritionRules from '../src/index.ts'
 
 interface FrappeRequest {
@@ -104,6 +106,7 @@ async function loadComposition(endpoint: string, options: { dynamicIdentity?: bo
     '- id: tongjianyun-nutrition-rules',
     "  name: '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules'",
     '  config:',
+    '    transport: mcp',
     `    endpoint: ${JSON.stringify(endpoint)}`,
     '    credentialRef: TONGJIANYUN_MCP_TOKEN',
     ...(options.dynamicIdentity
@@ -136,6 +139,7 @@ async function loadComposition(endpoint: string, options: { dynamicIdentity?: bo
       return modules.get(specifier)
     },
   } as unknown as NonNullable<typeof ctx.loader.internal>
+  await ctx.plugin(LocalSubprocessRuntime)
   await ctx.loader.create({
     name: 'cordis:include',
     config: { path: pathToFileURL(configPath).href },
@@ -244,7 +248,8 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
       - 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。
       - 用户要求生成 Word、Excel、PDF 或其他可下载报告时，生成文件后必须调用 tongjianyun_publish_report；只有拿到工具返回的 url 后才能回复。
       - 发布报告时必须使用工具返回的外网 url 作为 Markdown 下载链接；不得回复 /home/frappe、/workspace、file://、127.0.0.1 或 localhost 路径。
-      - 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；不要先搜索 IONE Harness 自身源码，也不要凭通用营养知识猜测童健云的实现。
+      - 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；源码问题先搜索 /home/zyd/frappe/native-bench/apps，再调用本插件的本地 Frappe 只读工具，不要凭通用营养知识猜测童健云的实现。
+      - 本地适配器只读并直接复用 Native Bench 的 Frappe ORM/业务函数；只有部署明确设置 transport: mcp 时，规则变更才会通过已认证 MCP 执行。
       - 工具调用失败时应明确说明无法读取童健云数据，不得编造数值、规则版本或计算依据。"
     `)
 

@@ -407,10 +407,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     text: [
       'Native Bench 源码取证规则：',
       '- 当前运行源码的唯一第一优先级是 /home/zyd/frappe/native-bench/apps；不要把 /workspace 或 frappe-direct 当作当前源码。',
-      '- 涉及童健云业务逻辑时，先用 native_bench_search_code 搜索，再用 native_bench_read_file 读取上下文。',
+      '- 涉及任意 Native Bench 应用业务逻辑时，先用 native_bench_search_code 搜索，再用 native_bench_read_file 读取上下文。',
       '- 涉及运行配置时使用 native_bench_runtime_status；该工具不会返回站点密钥或数据库密码。',
-      '- 解释数值时必须同时核对源码、当前规则和 child.myyr.top 的只读 MCP 数据；源码与数据库不一致时明确指出。',
-      '- 工具失败时说明证据不可用，不得用通用知识补造童健云计算结果。',
+      '- 涉及数据库时，若通用 Frappe 读取包已启用，使用 native_bench_frappe_list_documents 或 native_bench_frappe_get_document；否则明确说明数据库读取工具未启用。童健云营养问题仍优先使用营养专用工具。',
+      '- 源码与数据库不一致时明确指出；工具失败时说明证据不可用，不得用通用知识补造业务结果。',
     ].join('\n'),
   }))
 
@@ -429,7 +429,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'native_bench_search_code',
-    description: '在当前运行的 /home/zyd/frappe/native-bench/apps 中搜索源码。返回文件路径、行号和匹配行；必须用于分析童健云业务逻辑，支持中文关键词。只读。',
+    description: '在当前运行的 /home/zyd/frappe/native-bench/apps 中搜索所有应用源码。返回文件路径、行号和匹配行；支持中文关键词。只读。',
     parameters: {
       query: { type: 'string', required: true, description: '要搜索的文字或中文关键词。按字面匹配。' },
       app: { type: 'string', description: '可选应用目录名，例如 tongjianyun、ione_core 或 education。' },

@@ -36,4 +36,4 @@ The routing section and schemas are prefix-stable while the package configuratio
 ## Known Limitations and Deferred Work
 
 - **Runtime source parity** — Native Bench app directories do not carry a Git revision in every deployment. The tools therefore identify the configured root and return source paths, but a separate release manifest or file hash is needed for historical version comparison.
-- **Database operations remain separate** — this package never executes SQL or reads Frappe documents directly. Use the authenticated Tongjianyun MCP tools for permission-aware, read-only database evidence.
+- **Database operations remain a separate package** — this package never executes SQL or reads Frappe documents directly. The Tongjianyun nutrition package uses a separately allowlisted local Frappe adapter for permission-aware read evidence; MCP remains an explicit compatibility mode for network deployments.

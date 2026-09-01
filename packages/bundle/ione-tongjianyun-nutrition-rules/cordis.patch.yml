@@ -1,7 +1,6 @@
 # Opt-in Tongjianyun nutrition-rule Bundle. The row stays disabled until a
-# deployment supplies its site endpoint and secret references through a later
-# profile or home patch. This prevents an installed Bundle from booting with a
-# guessed endpoint or a credential value in source control.
+# deployment explicitly enables the local Native Bench adapter (or chooses the
+# authenticated MCP compatibility mode) through a later profile patch.
 
 - insert:
     - id: tongjianyun-nutrition-rules

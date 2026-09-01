@@ -1,6 +1,6 @@
 # Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
-#   pnpm run verify-translation-pairing --write docs/module-graph.md
-module-graph.md: 0f0dc7e98f6eafb42142c8bcead0fce5d13b07db
-module-graph.zh.md: 5d3d64d001bf409bf6820841e2f37f5eb0f6af47
+#   pnpm run verify-translation-pairing --write packages/bundle/ione-native-bench-frappe/README.md
+README.md: 4792d62266a56ecc3ce5f0dd5a45471e835e6f8a
+README.zh.md: f7de21ea11c7893a97f4d60c78ca43d4f7a4d4c0

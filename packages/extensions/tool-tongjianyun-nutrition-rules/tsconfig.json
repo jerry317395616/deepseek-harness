@@ -33,6 +33,12 @@
       "path": "../../core/tools"
     },
     {
+      "path": "../../subprocess/subprocess"
+    },
+    {
+      "path": "../../subprocess/subprocess-local"
+    },
+    {
       "path": "../../core/system-prompt"
     },
     {

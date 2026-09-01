@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules",
-  "description": "Tongjianyun nutrition-rule tools with a local Native Bench Frappe read adapter",
+  "name": "@deepseek-ai/dsh-tool-native-bench-frappe",
+  "description": "Permission-aware Native Bench Frappe ORM read tools for I-ONE Harness",
   "version": "0.1.1-rc.2",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/extensions/tool-tongjianyun-nutrition-rules"
+    "directory": "packages/extensions/tool-native-bench-frappe"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -29,31 +29,25 @@
     "lib/index.js",
     "lib/invariant.js",
     "lib/types/**/*.d.ts",
-    "python/native_query.py"
+    "python/native_frappe_query.py"
   ],
   "license": "MIT",
   "peerDependencies": {
-    "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-subprocess": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",
     "@deepseek-ai/dsh-tools": "workspace:^",
-    "@deepseek-ai/dsh-subprocess": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis-plugin-include": "workspace:^",
-    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
-    "@deepseek-ai/dsh-credentials": "workspace:^",
-    "@deepseek-ai/dsh-credentials-local": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
-    "@deepseek-ai/dsh-llm": "workspace:^",
-    "@deepseek-ai/dsh-system-prompt": "workspace:^",
-    "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-subprocess": "workspace:^",
     "@deepseek-ai/dsh-subprocess-local": "workspace:^",
+    "@deepseek-ai/dsh-system-prompt": "workspace:^",
+    "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   }
 }

@@ -2670,6 +2670,62 @@ export interface Config {
 
 Source: [`packages/lsp/tool-lsp/src/index.ts:58`](../packages/lsp/tool-lsp/src/index.ts)
 
+<a id="deepseek-aidsh-tool-native-bench-frappe"></a>
+
+## `@deepseek-ai/dsh-tool-native-bench-frappe`
+
+Requires: `tools` · `systemPrompt` · `subprocess`
+
+```ts config-catalog
+/** Deployment-owned configuration for the active Native Bench Frappe site. */
+export interface Config {
+  /** Absolute Native Bench root containing apps and sites. */
+  benchRoot?: string
+  /** Frappe site initialized by the local adapter. */
+  site?: string
+  /** Optional Python executable; relative paths resolve under benchRoot. */
+  pythonExecutable?: string
+  /** Fixed deployment-owned Frappe account used for permission checks. */
+  frappeUser?: string
+  /** Maximum captured helper output in bytes. */
+  maxOutputBytes?: number
+  /** Maximum serialized model arguments sent to the helper. */
+  maxInputBytes?: number
+  /** Cooperative timeout budget for one Frappe read. */
+  timeoutMs: number
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts:21`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+<a id="deepseek-aidsh-tool-native-bench-source"></a>
+
+## `@deepseek-ai/dsh-tool-native-bench-source`
+
+Requires: `tools` · `systemPrompt` · `subprocess` · `fs`
+
+```ts config-catalog
+/** Configuration for the active Native Bench source tree. */
+export interface Config {
+  /** Absolute Native Bench root containing apps, sites and config. */
+  benchRoot: string
+  /** Maximum matches retained inline by one source search. */
+  maxMatches?: number
+  /** Maximum bytes retained for one matched-line preview. */
+  maxLineBytes?: number
+  /** Maximum complete ripgrep output parsed by one search. */
+  maxRawOutputBytes?: number
+  /** Cooperative timeout applied through the Harness timeout policy. */
+  timeoutMs?: number
+  /** Ripgrep process termination grace period. */
+  graceMs?: number
+  /** Maximum complete source file size read by the file tool. */
+  maxFileBytes?: number
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-source/src/index.ts:42`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
 <a id="deepseek-aidsh-tool-pwsh"></a>
 
 ## `@deepseek-ai/dsh-tool-pwsh`
@@ -2913,23 +2969,43 @@ Source: [`packages/todo/tool-todo/src/index.ts:29`](../packages/todo/tool-todo/s
 
 ## `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules`
 
-Requires: `tools` · `credentials` · `systemPrompt`
+Requires: `tools` · `systemPrompt` · `subprocess`
 
 ```ts config-catalog
-/** Configurable connection facts for one Tongjianyun Frappe MCP endpoint. */
+/** Configurable facts for the local Frappe adapter or explicit MCP compatibility mode. */
 export interface Config {
-  /** Absolute Frappe method URL serving the MCP endpoint. */
-  endpoint: string
-  /** Credential reference whose value is a Frappe `api_key:api_secret` pair. */
-  credentialRef: string
+  /** Native is the secure default; mcp is an explicit network compatibility mode. */
+  transport?: 'native' | 'mcp'
+  /** Absolute active Native Bench root used by the local adapter. */
+  benchRoot?: string
+  /** Frappe site initialized by the local adapter. */
+  site?: string
+  /** Optional Python executable; relative paths resolve under benchRoot. */
+  pythonExecutable?: string
+  /** Fixed deployment-owned Frappe account used for local permission checks. */
+  frappeUser?: string
+  /** Maximum captured helper output in bytes. */
+  maxOutputBytes?: number
+  /** Absolute Frappe method URL serving the MCP endpoint in compatibility mode. */
+  endpoint?: string
+  /** Credential reference whose value is a Frappe `api_key:api_secret` pair in MCP mode. */
+  credentialRef?: string
   /** Optional short-lived current-user identity reference supplied by trusted site infrastructure. */
   actorTokenRef?: string
+  /** Credential reference for the Frappe/I-ONE identity signing secret. */
+  identitySecretRef?: string
+  /** Frappe account email represented by freshly minted actor assertions. */
+  identityEmail?: string
+  /** Optional Frappe username/name hint for resolving the identity email. */
+  identityUserHint?: string
+  /** Site audience for actor assertions; defaults to the endpoint hostname. */
+  identityAudience?: string
   /** Per-operation timeout, applied by the Harness tool timeout policy. */
   timeoutMs: number
 }
 ```
 
-Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts:22`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
+Source: [`packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts:32`](../packages/extensions/tool-tongjianyun-nutrition-rules/src/index.ts)
 
 <a id="deepseek-aidsh-tool-web"></a>
 
@@ -3371,6 +3447,8 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-code-runtime-python` ([`packages/code-runtime/code-runtime-python/src/index.ts`](../packages/code-runtime/code-runtime-python/src/index.ts))
 - `@deepseek-ai/dsh-home-paths` ([`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts))
 - `@deepseek-ai/dsh-hook-protocol` ([`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts))
+- `@deepseek-ai/dsh-ione-native-bench-frappe` ([`packages/bundle/ione-native-bench-frappe/src/index.ts`](../packages/bundle/ione-native-bench-frappe/src/index.ts))
+- `@deepseek-ai/dsh-ione-native-bench-source` ([`packages/bundle/ione-native-bench-source/src/index.ts`](../packages/bundle/ione-native-bench-source/src/index.ts))
 - `@deepseek-ai/dsh-ione-tongjianyun-nutrition-rules` ([`packages/bundle/ione-tongjianyun-nutrition-rules/src/index.ts`](../packages/bundle/ione-tongjianyun-nutrition-rules/src/index.ts))
 - `@deepseek-ai/dsh-launch-environment` ([`packages/util/launch-environment/src/index.ts`](../packages/util/launch-environment/src/index.ts))
 - `@deepseek-ai/dsh-llm-mock-server` ([`packages/test-support/llm-mock-server/src/index.ts`](../packages/test-support/llm-mock-server/src/index.ts))

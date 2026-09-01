@@ -1,0 +1,7 @@
+# Opt-in Native Bench Frappe ORM evidence Bundle. The profile layer supplies
+# the deployment-owned benchRoot and fixed Frappe account before activation.
+
+- insert:
+    - id: native-bench-frappe
+      name: '@deepseek-ai/dsh-tool-native-bench-frappe'
+      disabled: true

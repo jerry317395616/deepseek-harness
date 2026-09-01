@@ -118,6 +118,8 @@ flowchart TD
   subgraph group_bundle["packages/bundle"]
     pkg_base["base"]
     pkg_headless["headless"]
+    pkg_ione_native_bench_frappe["ione-native-bench-frappe"]
+    pkg_ione_native_bench_source["ione-native-bench-source"]
     pkg_ione_tongjianyun_nutrition_rules["ione-tongjianyun-nutrition-rules"]
     pkg_web_app["web-app"]
   end
@@ -206,6 +208,8 @@ flowchart TD
     pkg_cordis_client_runner["cordis-client-runner"]
     pkg_cordis_host_runner["cordis-host-runner"]
     pkg_tool_cordis["tool-cordis"]
+    pkg_tool_native_bench_frappe["tool-native-bench-frappe"]
+    pkg_tool_native_bench_source["tool-native-bench-source"]
     pkg_tool_tongjianyun_nutrition_rules["tool-tongjianyun-nutrition-rules"]
   end
   subgraph group_feedback["packages/feedback"]
@@ -349,6 +353,8 @@ flowchart TD
   pkg_scope --> pkg_invariants
   pkg_cmdline --> pkg_invariants
   pkg_base --> pkg_invariants
+  pkg_ione_native_bench_frappe --> pkg_invariants
+  pkg_ione_native_bench_source --> pkg_invariants
   pkg_ione_tongjianyun_nutrition_rules --> pkg_invariants
   pkg_client_ui_primitives --> pkg_invariants
   pkg_client_ui_slots --> pkg_invariants
@@ -881,8 +887,19 @@ flowchart TD
   pkg_cordis_host_runner --> pkg_session
   pkg_cordis_host_runner --> pkg_tools
   pkg_cordis_host_runner --> pkg_typert_protocol
+  pkg_tool_native_bench_frappe --> pkg_invariants
+  pkg_tool_native_bench_frappe --> pkg_subprocess
+  pkg_tool_native_bench_frappe --> pkg_system_prompt
+  pkg_tool_native_bench_frappe --> pkg_tools
+  pkg_tool_native_bench_source --> pkg_fs
+  pkg_tool_native_bench_source --> pkg_invariants
+  pkg_tool_native_bench_source --> pkg_subprocess
+  pkg_tool_native_bench_source --> pkg_system_prompt
+  pkg_tool_native_bench_source --> pkg_tools
   pkg_tool_tongjianyun_nutrition_rules --> pkg_credentials
   pkg_tool_tongjianyun_nutrition_rules --> pkg_invariants
+  pkg_tool_tongjianyun_nutrition_rules --> pkg_subprocess
+  pkg_tool_tongjianyun_nutrition_rules --> pkg_system_prompt
   pkg_tool_tongjianyun_nutrition_rules --> pkg_tools
   pkg_repeat_tool_reminder --> pkg_agent
   pkg_repeat_tool_reminder --> pkg_invariants
@@ -1485,6 +1502,8 @@ flowchart TD
 | [`scope`](../packages/core/scope) | `core` | [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`cmdline`](../packages/boot/cmdline) | `boot` | [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`base`](../packages/bundle/base) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
+| [`ione-native-bench-frappe`](../packages/bundle/ione-native-bench-frappe) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
+| [`ione-native-bench-source`](../packages/bundle/ione-native-bench-source) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`ione-tongjianyun-nutrition-rules`](../packages/bundle/ione-tongjianyun-nutrition-rules) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`client-ui-primitives`](../packages/client/ui-primitives) | `client` | [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`client-ui-slots`](../packages/client/ui-slots) | `client` | [`invariants`](../packages/runtime-diagnostics/invariants) |
@@ -1614,7 +1633,9 @@ flowchart TD
 | [`file-reference-local`](../packages/context/file-reference-local) | `context` | [`agent`](../packages/core/agent), [`file-reference`](../packages/context/file-reference), [`invariants`](../packages/runtime-diagnostics/invariants), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`session-reference`](../packages/context/session-reference) | `context` | [`agent`](../packages/core/agent), [`compaction`](../packages/compaction/compaction), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`output-retention`](../packages/util/output-retention), [`session`](../packages/core/session), [`session-query`](../packages/session-query/session-query), [`typert-protocol`](../packages/typert/protocol) |
 | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | `extensions` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
-| [`tool-tongjianyun-nutrition-rules`](../packages/extensions/tool-tongjianyun-nutrition-rules) | `extensions` | [`credentials`](../packages/credentials/credentials), [`invariants`](../packages/runtime-diagnostics/invariants), [`tools`](../packages/core/tools) |
+| [`tool-native-bench-frappe`](../packages/extensions/tool-native-bench-frappe) | `extensions` | [`invariants`](../packages/runtime-diagnostics/invariants), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
+| [`tool-native-bench-source`](../packages/extensions/tool-native-bench-source) | `extensions` | [`fs`](../packages/fs/fs), [`invariants`](../packages/runtime-diagnostics/invariants), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
+| [`tool-tongjianyun-nutrition-rules`](../packages/extensions/tool-tongjianyun-nutrition-rules) | `extensions` | [`credentials`](../packages/credentials/credentials), [`invariants`](../packages/runtime-diagnostics/invariants), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`repeat-tool-reminder`](../packages/guard/repeat-tool-reminder) | `guard` | [`agent`](../packages/core/agent), [`invariants`](../packages/runtime-diagnostics/invariants), [`tools`](../packages/core/tools) |
 | [`tool-call-timeout-policy`](../packages/guard/timeout-policy) | `guard` | [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |
 | [`tool-ask-user`](../packages/interaction/tool-ask-user) | `interaction` | [`agent`](../packages/core/agent), [`invariants`](../packages/runtime-diagnostics/invariants), [`tools`](../packages/core/tools), [`user-questions`](../packages/interaction/user-questions) |

@@ -124,7 +124,11 @@ export class NutritionMcpClient {
   }
 
   private async resolveCredential(ref: CredentialRef, label: string): Promise<string> {
-    const hit = await this.ctx.credentials.resolve(ref)
+    const credentials = this.ctx.get('credentials') as { resolve: (value: CredentialRef) => Promise<{ value?: string } | undefined> } | undefined
+    if (credentials === undefined) {
+      throw new Error('tongjianyun-nutrition-rules: credential service is not mounted; configure native mode or mount credentials')
+    }
+    const hit = await credentials.resolve(ref)
     if (hit?.value) return hit.value
     throw new Error(
       `tongjianyun-nutrition-rules: ${label} ${String(ref)} is not configured; set it in the Harness credential store`,

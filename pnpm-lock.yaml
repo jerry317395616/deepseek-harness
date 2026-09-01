@@ -1289,6 +1289,19 @@ importers:
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
 
+  packages/bundle/ione-native-bench-frappe:
+    dependencies:
+      '@deepseek-ai/dsh-tool-native-bench-frappe':
+        specifier: workspace:^
+        version: link:../../extensions/tool-native-bench-frappe
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
   packages/bundle/ione-tongjianyun-nutrition-rules:
     dependencies:
       '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules':
@@ -4375,6 +4388,31 @@ importers:
         specifier: workspace:^
         version: link:../../core/tools
 
+  packages/extensions/tool-native-bench-frappe:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-subprocess-local':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess-local
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+
   packages/extensions/tool-tongjianyun-nutrition-rules:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -4402,6 +4440,12 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-subprocess-local':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess-local
       '@deepseek-ai/dsh-system-prompt':
         specifier: workspace:^
         version: link:../../core/system-prompt

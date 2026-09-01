@@ -25,8 +25,9 @@
 | `@deepseek-ai/dsh-tool-bash` | `bash` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | bash 工具是 bash 执行器 seam 面向模型的消费方。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具（来自 `@deepseek-ai/dsh-tool-jobs`）收集／停止；禁用 `enableRunInBackground` 配置（默认为 true）后，该参数会被完全移除。 |
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费方（由 `@deepseek-ai/dsh-pwsh-local` 等 PowerShell 执行器为 `ctx.shell` 提供后端）；除沙箱接口外，它逐项对应 bash 工具调用。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具收集／停止；托管的 `DSH_*` 环境来自 `@deepseek-ai/dsh-shell-env`。每次调用都在新进程中运行，不使用持久 PTY 会话。路径采用原生 `C:\...` 形式，变量采用 `$env:NAME`。 |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`、`cordis_inspect_list`、`cordis_inspect_query`、`cordis_inspect_self`、`cordis_run`、`cordis_stop`、`cordis_undefine` | `ctx.tools`、`ctx.dynamicCordisRunner` | `tool/call`、`tool/result`、`process-local dynamic package lifecycle` | - | 不在任何随产品发布的树中，需要显式选择启用；动态 Package 代码可以访问真实运行时，见 .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md。该工具集注入 `@deepseek-ai/dsh-cordis-host-runner` 提供的 `ctx.dynamicCordisRunner`，后者拥有定义注册表和 vm 沙箱；组合缺少它时这些工具不会激活。运行中的 Package 在停止、undefine 或 DSH 重启前可以注册**额外的**模型可见工具；发生这类工具集变化时，系统会记录完整且有变动的请求头。 |
-| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_create_nutrition_rule_draft`、`tongjianyun_explain_nutrition_standard`、`tongjianyun_get_weekly_nutrition_analysis`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.credentials`、`ctx.systemPrompt` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。部署只有在提供已认证的 Frappe MCP 接口地址和凭据引用后才启用它。固定路由区段要求涉及童健云标准和真实食谱的问题先调用只读取证工具；发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
+| `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`、`tongjianyun_create_nutrition_rule_draft`、`tongjianyun_explain_nutrition_standard`、`tongjianyun_get_weekly_nutrition_analysis`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_publish_report`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.credentials（仅 MCP 兼容模式）` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。Native 部署会在配置的 Bench Python/Frappe 上直接运行三个只读营养操作，并将 MCP 保留为规则写入的显式兼容模式；后者需要已认证接口和凭据引用。固定路由区段要求先取源码证据再读取当前数据，发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
 | `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`、`native_bench_runtime_status`、`native_bench_search_code` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.fs` | `tool/call`、`tool/result` | - | 这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 `/home/zyd/frappe/native-bench`。 |
+| `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_get_document`、`native_bench_frappe_list_documents` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。Native 部署会在配置的 Bench 上通过 Frappe ORM 对所有获准 DocType 提供有界的列表／读取；受保护基础设施和凭据 DocType 会被拒绝，敏感字段会脱敏，绝不执行任意 SQL 或 Python。 |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
@@ -943,7 +944,81 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
 
-这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 /home/zyd/frappe/native-bench。
+这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 /home/zyd/frappe/native-bench。童健云营养包另有固定白名单的本地 Frappe 只读适配器，规则写入仍须显式使用 MCP/UI。
+
+<a id="deepseek-aidsh-tool-native-bench-frappe"></a>
+
+## `@deepseek-ai/dsh-tool-native-bench-frappe`
+
+### `native_bench_frappe_get_document`
+
+在当前 Native Bench 的 Frappe 站点中按权限读取一个允许的 DocType 记录。支持字段选择和敏感字段脱敏；禁止任意 SQL，只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doctype": {
+      "type": "string",
+      "description": "Frappe DocType 名称。"
+    },
+    "name": {
+      "type": "string",
+      "description": "记录名称或编号。"
+    },
+    "fields": {
+      "description": "可选字段名数组，最多64个；留空只返回 name。"
+    }
+  },
+  "required": [
+    "doctype",
+    "name"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+### `native_bench_frappe_list_documents`
+
+在当前 Native Bench 的 Frappe 站点中按权限查询任意允许的 DocType 列表。支持结构化过滤、排序、分页和字段选择；禁止任意 SQL，敏感字段自动脱敏，只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doctype": {
+      "type": "string",
+      "description": "Frappe DocType 名称，例如 Student、Class 或 Course。"
+    },
+    "fields": {
+      "description": "可选字段名数组，最多64个；留空只返回 name。"
+    },
+    "filters": {
+      "description": "可选过滤对象或 [字段, 运算符, 值] 条件数组；不接受 SQL。"
+    },
+    "order_by": {
+      "type": "string",
+      "description": "可选单字段排序，例如 modified desc。"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "返回行数，1至100，默认20。"
+    },
+    "start": {
+      "type": "integer",
+      "description": "分页起点，0至100000，默认0。"
+    }
+  },
+  "required": [
+    "doctype"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+可选 Bundle 会以禁用状态插入该工具行。Native 部署会在配置的 Bench 上通过 Frappe ORM 对所有获准 DocType 提供有界的列表／读取；受保护基础设施和凭据 DocType 会被拒绝，敏感字段会脱敏，绝不执行任意 SQL 或 Python。
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

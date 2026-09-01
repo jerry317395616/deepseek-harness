@@ -12,13 +12,15 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-tools'
 // Declaration merge only: makes ctx.systemPrompt visible for routing guidance.
 import type {} from '@deepseek-ai/dsh-system-prompt'
+import type {} from '@deepseek-ai/dsh-subprocess'
 import { NutritionMcpClient, resolveNutritionMcpSpec } from './mcp.ts'
+import { NATIVE_READ_OPERATIONS, NutritionNativeClient, resolveNutritionNativeSpec } from './native.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-tongjianyun-nutrition-rules'
 
-/** Services required to register tools and resolve each operation's secret references. */
-export const inject = ['tools', 'credentials', 'systemPrompt']
+/** Services required for local Frappe reads and model-visible routing guidance. */
+export const inject = ['tools', 'systemPrompt', 'subprocess']
 
 /** The host directory exposed by the authenticated Harness download route. */
 const PUBLIC_DOWNLOAD_ROOT = '/home/zyd/frappe-direct/.harness-public'
@@ -26,12 +28,24 @@ const PUBLIC_DOWNLOAD_ROOT = '/home/zyd/frappe-direct/.harness-public'
 /** Model-readable source roots for generated Tongjianyun artifacts. */
 const ARTIFACT_SOURCE_ROOTS = ['/home/zyd/frappe/native-bench', '/home/frappe', '/workspace', '/home/zyd/frappe-direct']
 
-/** Configurable connection facts for one Tongjianyun Frappe MCP endpoint. */
+/** Configurable facts for the local Frappe adapter or explicit MCP compatibility mode. */
 export interface Config {
-  /** Absolute Frappe method URL serving the MCP endpoint. */
-  endpoint: string
-  /** Credential reference whose value is a Frappe `api_key:api_secret` pair. */
-  credentialRef: string
+  /** Native is the secure default; mcp is an explicit network compatibility mode. */
+  transport?: 'native' | 'mcp'
+  /** Absolute active Native Bench root used by the local adapter. */
+  benchRoot?: string
+  /** Frappe site initialized by the local adapter. */
+  site?: string
+  /** Optional Python executable; relative paths resolve under benchRoot. */
+  pythonExecutable?: string
+  /** Fixed deployment-owned Frappe account used for local permission checks. */
+  frappeUser?: string
+  /** Maximum captured helper output in bytes. */
+  maxOutputBytes?: number
+  /** Absolute Frappe method URL serving the MCP endpoint in compatibility mode. */
+  endpoint?: string
+  /** Credential reference whose value is a Frappe `api_key:api_secret` pair in MCP mode. */
+  credentialRef?: string
   /** Optional short-lived current-user identity reference supplied by trusted site infrastructure. */
   actorTokenRef?: string
   /** Credential reference for the Frappe/I-ONE identity signing secret. */
@@ -48,8 +62,14 @@ export interface Config {
 
 /** Validate deployment-owned connection settings without ever accepting a secret value. */
 export const Config: z<Config> = z.object({
-  endpoint: z.string().required(),
-  credentialRef: z.string().required(),
+  transport: z.union(['native', 'mcp'] as const).default('native'),
+  benchRoot: z.string().default('/home/zyd/frappe/native-bench'),
+  site: z.string().default('child.myyr.top'),
+  pythonExecutable: z.string(),
+  frappeUser: z.string().default('Administrator'),
+  maxOutputBytes: z.number().step(1).min(16_384).max(5_000_000).default(1_000_000),
+  endpoint: z.string(),
+  credentialRef: z.string(),
   actorTokenRef: z.string(),
   identitySecretRef: z.string(),
   identityEmail: z.string(),
@@ -58,11 +78,32 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1_000).max(120_000).default(30_000),
 })
 
-/** Register nine audited Tongjianyun nutrition tools and their routing policy. */
+/** Register ten audited Tongjianyun nutrition tools and their routing policy. */
 export function apply(ctx: Context, config: Config): void {
-  const client = new NutritionMcpClient(ctx, resolveNutritionMcpSpec(config))
+  const native = config.transport === 'mcp' ? undefined : new NutritionNativeClient(
+    ctx,
+    resolveNutritionNativeSpec(config),
+  )
+  const mcp = config.transport === 'native' ? undefined : new NutritionMcpClient(
+    ctx,
+    resolveNutritionMcpSpec({
+      endpoint: config.endpoint ?? '',
+      credentialRef: config.credentialRef ?? '',
+      ...(config.actorTokenRef === undefined ? {} : { actorTokenRef: config.actorTokenRef }),
+      ...(config.identitySecretRef === undefined ? {} : { identitySecretRef: config.identitySecretRef }),
+      ...(config.identityEmail === undefined ? {} : { identityEmail: config.identityEmail }),
+      ...(config.identityUserHint === undefined ? {} : { identityUserHint: config.identityUserHint }),
+      ...(config.identityAudience === undefined ? {} : { identityAudience: config.identityAudience }),
+    }),
+  )
   const call = (tool: string, arguments_: Record<string, JsonValue>, signal: AbortSignal): Promise<JsonValue> =>
-    client.call(tool, arguments_, signal)
+    native !== undefined && NATIVE_READ_OPERATIONS.has(tool)
+      ? native.call(tool, arguments_, signal)
+      : mcp === undefined
+        ? Promise.reject(new Error(
+          'tongjianyun-nutrition-rules: native transport only supports read operations; configure transport: mcp for rule changes',
+        ))
+        : mcp.call(tool, arguments_, signal)
   const output = {
     schema: { type: 'json' as const },
     render: (_arguments: unknown, value: JsonValue) => [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
@@ -78,7 +119,8 @@ export function apply(ctx: Context, config: Config): void {
       '- 用户询问某份或最新食谱的实际营养值、达标情况、食材构成或分析结论时，必须先调用 tongjianyun_get_weekly_nutrition_analysis。',
       '- 用户要求生成 Word、Excel、PDF 或其他可下载报告时，生成文件后必须调用 tongjianyun_publish_report；只有拿到工具返回的 url 后才能回复。',
       '- 发布报告时必须使用工具返回的外网 url 作为 Markdown 下载链接；不得回复 /home/frappe、/workspace、file://、127.0.0.1 或 localhost 路径。',
-      '- 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；源码问题先搜索 /home/zyd/frappe/native-bench/apps，再调用营养 MCP，不要凭通用营养知识猜测童健云的实现。',
+      '- 以工具返回的当前生效规则、真实食谱数据、计算明细和标准来源作答；源码问题先搜索 /home/zyd/frappe/native-bench/apps，再调用本插件的本地 Frappe 只读工具，不要凭通用营养知识猜测童健云的实现。',
+      '- 本地适配器只读并直接复用 Native Bench 的 Frappe ORM/业务函数；只有部署明确设置 transport: mcp 时，规则变更才会通过已认证 MCP 执行。',
       '- 工具调用失败时应明确说明无法读取童健云数据，不得编造数值、规则版本或计算依据。',
     ].join('\n'),
   }))
