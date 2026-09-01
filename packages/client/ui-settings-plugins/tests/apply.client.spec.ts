@@ -3,9 +3,9 @@
 import { Context } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
-import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
+import { RemoteError, TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type {
@@ -27,18 +27,15 @@ async function bench(served?: string[]) {
   locale.setLocale('zh')
   ctx.provide('locale', locale)
   const describeSettings = vi.fn(() => Promise.resolve(served === undefined
-    ? { rpcId: 's', result: { ok: false, error: {} } }
+    ? { ok: false, error: new RemoteError('gateway/internal', 'no provider', {}) }
     : {
-      rpcId: 's',
-      result: {
-        ok: true,
-        value: {
-          writable: true,
-          hasDocument: true,
-          namespaces: served.map(ns => ({
-            ns, schema: {}, value: {}, applies: 'live', secrets: [], revision: 0,
-          })),
-        },
+      ok: true,
+      value: {
+        writable: true,
+        hasDocument: true,
+        namespaces: served.map(ns => ({
+          ns, schema: {}, value: {}, applies: 'live', secrets: [], revision: 0,
+        })),
       },
     }))
   // The section binds its scopes through the Settings surface's service, and
@@ -146,13 +143,13 @@ describe('ui-settings-plugins apply', () => {
     // Which namespaces the Host serves is a registration fact the wire never
     // announces on its own, so the tab rides the invalidation that can
     // accompany a changed composition.
-    const { ctx, slots, describeSettings } = await bench(['bash'])
+    const { ctx, slots, describeSettings, remote } = await bench(['bash'])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
     await vi.waitFor(() => { expect(describeSettings).toHaveBeenCalled() })
     describeSettings.mockClear()
 
-    ctx.remote.$dispatch('settings/document-updated', ['bash', 1])
+    remote.emit('settings/document-updated', ['bash', 1])
 
     await vi.waitFor(() => { expect(describeSettings).toHaveBeenCalled() })
   })
@@ -183,7 +180,7 @@ describe('ui-settings-plugins apply', () => {
     declareRoot(slots)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(slots.entries('settings.plugin.item')).toHaveLength(3)
+    expect(slots.entries('settings.plugin.item')).toHaveLength(4)
 
     await fiber.dispose()
 

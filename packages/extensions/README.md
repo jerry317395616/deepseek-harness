@@ -1,8 +1,26 @@
-# extensions/ — the agent modifies its own runtime
+---
+description: "The extensions group map: model-facing tools and dual-half runners for defining, running, and removing dynamic Cordis packages, for users and maintainers navigating the group."
+kind: "package-group"
+---
+
+# packages/extensions
 
 English | [中文](README.zh.md)
 
-Model-facing tools over the live cordis runtime the agent itself runs inside: inspect the loaded plugins and service API, define and run model-written dynamic packages, and retract them again — plus the restricted repository Plugin runtime. Both browser-half packages live here rather than under `packages/client/` because they are halves of this subsystem's dual-half packages; the host aggregate excludes them so each face keeps its own compiler program. Design home: [the toolset Agent Note](../../.agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md).
+## Summary
+
+The extensions group lets a running agent modify the runtime it runs inside: the model can inspect the plugins and services loaded in the current DSH process, define a dynamic Cordis package (with a host half, a browser half, or both), run it, stop it, and remove it, and a browser panel operates every definition. Packages evolve by plugin: a plugin holds immutable package versions and can run or update between them. Definitions live only in process memory, so a DSH restart clears them and nothing here writes repository files or configuration. Four packages form the subsystem: the model-facing tools plus the host runner, and the browser runner plus the browser UI.
+
+## Table of Contents
+
+- [Packages](#packages)
+- [Related documentation](#related-documentation)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="packages"></a>
+## Packages
 
 | Package | Role | ctx key |
 |---|---|---|
