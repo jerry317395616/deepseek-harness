@@ -46,6 +46,38 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
   })
 }
 
+/** The card plugin's context, scripted down to the namespaces a card reaches. */
+function ctxWith(namespaces: object) {
+  return { remote: namespaces } as never
+}
+
+function modelsApi(options: {
+  groups?: readonly {
+    id: string
+    name: string
+    models: readonly { id: string; name: string }[]
+  }[]
+  failures?: readonly { id: string; name: string; message: string }[]
+  error?: string
+} = {}) {
+  const models = vi.fn(() => Promise.resolve({
+    ...(options.error === undefined
+      ? { ok: true as const, value: { groups: options.groups ?? [], failures: options.failures ?? [] } }
+      : { ok: false as const, error: new RemoteError('gateway/internal', options.error, {}) }),
+  }))
+  return { ctx: ctxWith({ session: { modelCatalog: models } }), models }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((accept, fail) => {
+    resolve = accept
+    reject = fail
+  })
+  return { promise, resolve, reject }
+}
+
 describe('CardForm', () => {
   function form() {
     const host = stubSettingsScope<Record<string, unknown>>()

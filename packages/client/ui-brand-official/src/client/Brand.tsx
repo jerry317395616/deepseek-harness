@@ -1,8 +1,7 @@
 import { IoneHarnessLogo } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HeroBrandMarkOwnerProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SidebarBrandMarkOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
 
-type OfficialBrandMarkProps = SidebarBrandMarkOwnerProps & Pick<HeroBrandMarkOwnerProps, 'className'>
+type OfficialBrandMarkProps = SidebarBrandMarkOwnerProps & { className?: string }
 
 /**
  * Render the iONE Harness mark with the presentation requested by its host surface.

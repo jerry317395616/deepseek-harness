@@ -38,18 +38,9 @@ async function bench(served?: string[]) {
         })),
       },
     }))
-  // The section binds its scopes through the Settings surface's service, and
-  // forwarded Host events reach it through the same `$dispatch` handoff the
-  // connection sink makes.
-  new TestRemote(ctx)
-  ctx.provide('connection', {
-    isLoopback: true,
-    api: {
-      settings: { describe: describeSettings },
-    },
-  } as never)
+  const remote = new TestRemote(ctx, { settings: { describe: describeSettings } })
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()
-  return { ctx, slots: ctx.get('slots') as SlotRegistry, describeSettings }
+  return { ctx, slots: ctx.get('slots') as SlotRegistry, describeSettings, remote }
 }
 
 function declareRoot(slots: SlotRegistry): () => void {

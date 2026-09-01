@@ -12,7 +12,7 @@ import type {
 import { SubprocessRuntime } from '@deepseek-ai/dsh-subprocess'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import * as NativeFrappe from '../src/index.ts'
@@ -75,7 +75,7 @@ async function loadNative(): Promise<{ ctx: Context; subprocess: StubNativeSubpr
 function execute(ctx: Context, call: string, name: string, arguments_: Record<string, unknown>) {
   return ctx.tools.execute({
     signal: new AbortController().signal,
-    callId: CallId(call),
+    callId: ToolCallId(call),
     name,
     arguments: arguments_,
   })

@@ -377,8 +377,9 @@ function renderCode(node: Md.Code, key: Key, context: MarkdownRenderContext): Re
       // that trim eat a REAL trailing blank line inside the fence instead.
       code={`${codeValue}\n`}
       lang={context.streaming ? undefined : lang}
-      copyLabel={context.codeLabels?.copyLabel}
-      copiedLabel={context.codeLabels?.copiedLabel}
+      streaming={context.streaming}
+      copyLabel={context.labels.code.copyLabel}
+      copiedLabel={context.labels.code.copiedLabel}
     />
   )
 }

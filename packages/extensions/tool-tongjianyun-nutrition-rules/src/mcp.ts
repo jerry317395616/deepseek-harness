@@ -4,7 +4,7 @@ import { createHmac } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import type { CredentialRef } from '@deepseek-ai/dsh-credentials'
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 const ACTOR_TOKEN_PREFIX = 'ione1'
 const ACTOR_TOKEN_TTL_SECONDS = 600

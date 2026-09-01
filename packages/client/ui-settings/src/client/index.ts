@@ -70,12 +70,10 @@ export function settingsPersistence(
  */
 export function apply(ctx: Context): void {
   const schema = new SettingsSchemaService(ctx)
-  const connection = ctx.get('connection') as ConnectionHandle
-  const persistence = settingsPersistence(connection.isLoopback)
-  const mirror = new SettingsDescribeMirror(
-    connection.api,
-    persistence,
-  )
+  // Resolved once here, where `remote` is declared in this plugin's own
+  // inject; the binder hands the same answer to every scope it binds.
+  const persistence = settingsPersistence(ctx.remote.$host.isLoopback)
+  const mirror = new SettingsDescribeMirror(ctx, persistence)
   ctx.effect(() => {
     const disposers = [
       ctx.remote.$on('settings/document-updated', () => { void mirror.load() }),

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { Context } from '@deepseek-ai/cordis'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
@@ -51,7 +51,7 @@ afterEach(async () => {
 function call(name: string, arguments_: Record<string, unknown>) {
   return ctx.tools.execute({
     signal: new AbortController().signal,
-    callId: CallId(`native-bench-${++sequence}`),
+    callId: ToolCallId(`native-bench-${++sequence}`),
     name,
     arguments: arguments_,
   })

@@ -4,10 +4,9 @@
 // ConversationRoot so the textarea survives the hero → composer flip); CSS
 // positions it over this shell's glow area during the hero phase.
 
-import { useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import {
-  IoneHarnessLogo, IconChevronDownOutline14, IconFolderClose16, IconFolderOpen16,
+  FISH_LOGO_PATH, FISH_LOGO_VIEWBOX, IoneHarnessLogo, IconChevronDownOutline14, IconFolderClose16, IconFolderOpen16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { workspaceTitleOf } from '@deepseek-ai/dsh-util-workspace-path'
 import type { ConversationSlotProps } from '../contract/slots.ts'
@@ -100,7 +99,7 @@ const HERO_SWIM_DOWN_PATH =
  * @param props.hovering - driven by the hitbox parent's pointer state.
  * @returns the fish svg element.
  */
-function _HeroFish({ hovering }: { hovering: boolean }) {
+export function HeroFish({ hovering }: { hovering: boolean }) {
   return (
     <svg
       className={css.fish}
@@ -133,7 +132,6 @@ function _HeroFish({ hovering }: { hovering: boolean }) {
  * @returns the centered hero element tree.
  */
 export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
-  const [_hovering, _setHovering] = useState(false)
   return (
     <div className={css.root}>
       <div className={css.stack}>

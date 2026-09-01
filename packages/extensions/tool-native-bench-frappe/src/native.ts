@@ -3,7 +3,7 @@
 import { fileURLToPath } from 'node:url'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {
   SubprocessHandle,
   SubprocessOutcome,

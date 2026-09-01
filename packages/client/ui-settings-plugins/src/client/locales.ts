@@ -9,7 +9,14 @@ export type PluginsSettingsLocaleKey =
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
-  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint'
+  | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
+  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'subagentModelSelectionTitle' | 'subagentModelSelectionDescription'
+  | 'subagentModelSelectionToggle' | 'subagentModelSelectionChoose' | 'subagentModelSelectionAllowed'
+  | 'subagentModelSelectionLoading' | 'subagentModelSelectionLoadFailed' | 'subagentModelSelectionRetry'
+  | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
+  | 'subagentModelSelectionUnavailableGroup' | 'subagentModelSelectionEmpty'
+  | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -42,8 +49,29 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   webSearchTitle: 'Web search',
   webSearchDescription: 'Search through the deployment SearXNG service.',
+  webSearchApiKey: 'API key',
+  webSearchApiKeyHint: 'Stored outside the settings file. Leave blank to keep the current key.',
+  webSearchApiKeySet: 'A key is configured.',
+  webSearchApiKeyUnset: 'No key is configured; search is unavailable until one is.',
   webSearchBaseUrl: 'Endpoint',
   webSearchBaseUrlHint: 'Leave blank to use the local SearXNG service.',
+  webSearchMaxUses: 'Max searches per request',
+  webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionDescription: 'Control which models agents may choose for subagents.',
+  subagentModelSelectionToggle: 'Allow agents to choose models for subagents',
+  subagentModelSelectionChoose: 'When enabled, agents can choose a provider, model, and reasoning effort for each subagent from the authorized models below. Applies only to new sessions.',
+  subagentModelSelectionAllowed: 'Models agents may choose',
+  subagentModelSelectionLoading: 'Loading models…',
+  subagentModelSelectionLoadFailed: 'Models could not be loaded.',
+  subagentModelSelectionRetry: 'Retry',
+  subagentModelSelectionPartial: 'Some model providers could not be loaded; saved choices remain removable.',
+  subagentModelSelectionUnavailable: 'Currently unavailable',
+  subagentModelSelectionUnavailableGroup: 'Saved but currently unavailable',
+  subagentModelSelectionEmpty: 'No model provider currently advertises a model.',
+  subagentModelSelectionRequired: 'Select at least one model before saving.',
+  subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
+  subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
 }
 /** Simplified Chinese copy. */
 export const zh: Record<PluginsSettingsLocaleKey, string> = {
@@ -76,6 +104,27 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   webSearchTitle: '网页搜索',
   webSearchDescription: '通过本部署的 SearXNG 服务搜索网页。',
+  webSearchApiKey: 'API Key',
+  webSearchApiKeyHint: '不写入设置文件。留空表示保持当前密钥。',
+  webSearchApiKeySet: '已配置密钥。',
+  webSearchApiKeyUnset: '未配置密钥；配置之前搜索不可用。',
   webSearchBaseUrl: '接口地址',
   webSearchBaseUrlHint: '留空则使用本机 SearXNG 服务。',
+  webSearchMaxUses: '单次请求最多搜索次数',
+  webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionDescription: '控制 Agent 为 Subagent 选择模型的权限。',
+  subagentModelSelectionToggle: '允许 Agent 为 Subagent 选择模型',
+  subagentModelSelectionChoose: '开启后，Agent 可以从下方授权模型中，为每个 Subagent 选择提供方、模型和推理强度。仅影响新会话。',
+  subagentModelSelectionAllowed: 'Agent 可选择的模型',
+  subagentModelSelectionLoading: '正在加载模型…',
+  subagentModelSelectionLoadFailed: '无法加载模型。',
+  subagentModelSelectionRetry: '重试',
+  subagentModelSelectionPartial: '部分模型提供方暂时无法加载；已保存的选择仍可移除。',
+  subagentModelSelectionUnavailable: '当前不可用',
+  subagentModelSelectionUnavailableGroup: '已保存但当前不可用',
+  subagentModelSelectionEmpty: '当前没有模型提供方公布模型。',
+  subagentModelSelectionRequired: '保存前请至少选择一个模型。',
+  subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
+  subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
 }

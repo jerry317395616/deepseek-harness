@@ -232,6 +232,8 @@ export class SettingsScopeBinder extends Service {
   private readonly mirror: SettingsDescribeMirror
   private readonly schema: SettingsSchemaService
   private readonly persistence: 'host' | 'memory'
+  /** The providing fiber used for the scope's remote writes. */
+  private readonly owner: Context
 
   /**
    * @param ctx - the providing plugin's context.
@@ -241,13 +243,13 @@ export class SettingsScopeBinder extends Service {
   constructor(ctx: Context, config: {
     mirror: SettingsDescribeMirror
     schema: SettingsSchemaService
-    persistence?: 'host' | 'memory'
+    persistence: 'host' | 'memory'
   }) {
     super(ctx, 'settingsScope')
     this.mirror = config.mirror
     this.schema = config.schema
-    const connection = ctx.get('connection') as ConnectionHandle
-    this.persistence = config.persistence ?? (connection.isLoopback ? 'host' : 'memory')
+    this.persistence = config.persistence
+    this.owner = ctx
   }
 
   /**

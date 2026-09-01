@@ -5,7 +5,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import type {} from '@deepseek-ai/dsh-web'
 import { SEARXNG_DEFAULT_BASE_URL, SearxngSearchProvider } from './provider.ts'
 import type { SearxngSearchProviderOptions } from './provider.ts'
@@ -35,7 +35,7 @@ export const Config: z<Config> = z.object({
 })
 
 /** Settings namespace shown in Harness's plugin configuration UI. */
-export const WEB_SEARCH_SEARXNG_SETTINGS_NAMESPACE = settingsNamespace('web-search-searxng')
+export const WEB_SEARCH_SEARXNG_SETTINGS_NAMESPACE = 'web-search-searxng'
 
 /**
  * Resolve one settings view into the next operation's provider options.
@@ -55,9 +55,11 @@ function resolveOptions(config: Config): SearxngSearchProviderOptions {
  */
 export function apply(ctx: Context, config: Config): void {
   let current: () => Config = () => config
-  installSettingsSection(ctx, WEB_SEARCH_SEARXNG_SETTINGS_NAMESPACE, Config, config, {
-    setSource: (source) => { current = source },
-    onChange: () => {},
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, WEB_SEARCH_SEARXNG_SETTINGS_NAMESPACE, Config, config, {
+      setSource: (source) => { current = source },
+      onChange: () => {},
+    })
   })
   ctx.web.registerSearchProvider(new SearxngSearchProvider(() => resolveOptions(current())))
 }

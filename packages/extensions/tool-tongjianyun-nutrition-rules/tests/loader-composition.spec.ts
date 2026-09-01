@@ -17,7 +17,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import LocalCredentialProvider from '@deepseek-ai/dsh-credentials-local'
-import { CallId } from '@deepseek-ai/dsh-llm'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import LocalSubprocessRuntime from '@deepseek-ai/dsh-subprocess-local'
@@ -152,7 +152,7 @@ async function loadComposition(endpoint: string, options: { dynamicIdentity?: bo
 function execute(ctx: Context, call: string, name: string, arguments_: Record<string, unknown>) {
   return ctx.tools.execute({
     signal: new AbortController().signal,
-    callId: CallId(call),
+    callId: ToolCallId(call),
     name,
     arguments: arguments_,
   })
