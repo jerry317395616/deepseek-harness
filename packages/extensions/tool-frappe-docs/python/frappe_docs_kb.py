@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Synchronize and query a local index of official docs.frappe.io Markdown pages."""
+"""Synchronize and query a local index of official docs.frappe.io pages."""
 
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -27,7 +28,7 @@ OFFICIAL_ORIGIN = "https://docs.frappe.io"
 DEFAULT_SITEMAP = f"{OFFICIAL_ORIGIN}/sitemap.xml"
 DATABASE_NAME = "frappe-docs.sqlite3"
 USER_AGENT = "IONE-Harness-FrappeDocsIndexer/1.0 (+https://child.myyr.top)"
-MAX_PAGE_BYTES = 2_000_000
+MAX_PAGE_BYTES = 5_000_000
 MAX_CHUNK_CHARACTERS = 6_000
 MAX_QUERY_TOKENS = 24
 SYNC_SCHEMA_VERSION = "1"
@@ -86,6 +87,87 @@ class RateLimiter:
             if remaining > 0:
                 time.sleep(remaining)
             self._next_request = time.monotonic() + self.delay_seconds
+
+
+class DocumentationHTMLParser(HTMLParser):
+    """Extract article or main text without indexing navigation and scripts."""
+
+    _ignored_tags = {"footer", "header", "nav", "noscript", "script", "style", "svg"}
+    _block_tags = {
+        "address", "article", "aside", "blockquote", "br", "dd", "div", "dl", "dt",
+        "figcaption", "figure", "footer", "h1", "h2", "h3", "h4", "h5", "h6",
+        "header", "hr", "li", "main", "nav", "ol", "p", "pre", "section", "table",
+        "tbody", "td", "tfoot", "th", "thead", "tr", "ul",
+    }
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.article_depth = 0
+        self.main_depth = 0
+        self.ignored_depth = 0
+        self.title_depth = 0
+        self.article_parts: list[str] = []
+        self.main_parts: list[str] = []
+        self.title_parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        normalized = tag.lower()
+        if normalized in self._ignored_tags:
+            self.ignored_depth += 1
+            return
+        if normalized == "article":
+            self.article_depth += 1
+        if normalized == "main":
+            self.main_depth += 1
+        if normalized == "title":
+            self.title_depth += 1
+        if self.ignored_depth == 0:
+            if re.fullmatch(r"h[1-6]", normalized):
+                self._append(f"\n\n{'#' * int(normalized[1])} ")
+            elif normalized in self._block_tags:
+                self._append("\n\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        normalized = tag.lower()
+        if normalized in self._ignored_tags:
+            self.ignored_depth = max(0, self.ignored_depth - 1)
+            return
+        if self.ignored_depth == 0 and normalized in self._block_tags:
+            self._append("\n\n")
+        if normalized == "article":
+            self.article_depth = max(0, self.article_depth - 1)
+        if normalized == "main":
+            self.main_depth = max(0, self.main_depth - 1)
+        if normalized == "title":
+            self.title_depth = max(0, self.title_depth - 1)
+
+    def handle_data(self, data: str) -> None:
+        if self.title_depth > 0:
+            self.title_parts.append(data)
+        if self.ignored_depth == 0:
+            self._append(data)
+
+    def _append(self, value: str) -> None:
+        if self.article_depth > 0:
+            self.article_parts.append(value)
+        if self.main_depth > 0:
+            self.main_parts.append(value)
+
+    def document(self) -> tuple[str, str]:
+        """Return the preferred bounded document title and body."""
+        parts = self.article_parts if self.article_parts else self.main_parts
+        content = normalize_extracted_text("".join(parts))
+        title = normalize_extracted_text("".join(self.title_parts)).split("\n", 1)[0]
+        return title[:500], content
+
+
+def normalize_extracted_text(value: str) -> str:
+    """Normalize HTML-extracted whitespace while preserving paragraph boundaries."""
+    normalized = value.replace("\r\n", "\n").replace("\r", "\n").replace("\xa0", " ")
+    normalized = re.sub(r"[\t\f\v ]+", " ", normalized)
+    normalized = re.sub(r" *\n *", "\n", normalized)
+    return re.sub(r"\n{3,}", "\n\n", normalized).strip()
 
 
 def utc_now() -> str:
@@ -190,12 +272,19 @@ def official_url(value: str) -> str:
     return urllib.parse.urlunsplit(("https", "docs.frappe.io", path, "", ""))
 
 
-def fetch_bytes(url: str, *, timeout: float, max_bytes: int, limiter: RateLimiter | None = None) -> bytes:
+def fetch_bytes(
+    url: str,
+    *,
+    timeout: float,
+    max_bytes: int,
+    limiter: RateLimiter | None = None,
+    accept: str = "text/markdown, application/xml;q=0.9",
+) -> bytes:
     """Fetch one bounded official resource with deployment-owned request headers."""
     normalized = official_url(url)
     if limiter is not None:
         limiter.wait()
-    request = urllib.request.Request(normalized, headers={"User-Agent": USER_AGENT, "Accept": "text/markdown, application/xml;q=0.9"})
+    request = urllib.request.Request(normalized, headers={"User-Agent": USER_AGENT, "Accept": accept})
     with urllib.request.urlopen(request, timeout=timeout) as response:
         content_length = response.headers.get("Content-Length")
         if content_length is not None and int(content_length) > max_bytes:
@@ -260,17 +349,57 @@ def infer_route_metadata(url: str) -> tuple[str, str, str]:
     return product[:80], version[:40], language[:20]
 
 
+def html_fallback(entry: SitemapEntry, *, timeout: float, limiter: RateLimiter) -> FetchedPage:
+    """Fetch one official HTML route when its Markdown alternate is unavailable."""
+    data = fetch_bytes(
+        entry.url,
+        timeout=timeout,
+        max_bytes=MAX_PAGE_BYTES,
+        limiter=limiter,
+        accept="text/html,application/xhtml+xml;q=0.9",
+    )
+    try:
+        html = data.decode("utf-8")
+    except UnicodeDecodeError as error:
+        raise KnowledgeBaseError("documentation HTML is not UTF-8") from error
+    parser = DocumentationHTMLParser()
+    parser.feed(html)
+    parser.close()
+    html_title, content = parser.document()
+    if len(content) < 20:
+        raise KnowledgeBaseError("documentation HTML has no useful article or main content")
+    product, version, language = infer_route_metadata(entry.url)
+    title = html_title or route_title(entry.url)
+    return FetchedPage(
+        entry=entry,
+        markdown_url=entry.url,
+        title=title[:500],
+        space=product,
+        product=product,
+        version=version,
+        language=language,
+        updated=entry.lastmod,
+        content=content,
+        content_sha256=hashlib.sha256(content.encode("utf-8")).hexdigest(),
+    )
+
+
 def fetch_page(entry: SitemapEntry, *, timeout: float, limiter: RateLimiter) -> FetchedPage:
-    """Fetch one Markdown alternate and derive its searchable metadata."""
+    """Fetch one Markdown alternate, with a same-origin HTML body fallback."""
     markdown_url = f"{entry.url}.md"
-    data = fetch_bytes(markdown_url, timeout=timeout, max_bytes=MAX_PAGE_BYTES, limiter=limiter)
+    try:
+        data = fetch_bytes(markdown_url, timeout=timeout, max_bytes=MAX_PAGE_BYTES, limiter=limiter)
+    except urllib.error.HTTPError as error:
+        if error.code not in {404, 406}:
+            raise
+        return html_fallback(entry, timeout=timeout, limiter=limiter)
     try:
         markdown = data.decode("utf-8")
     except UnicodeDecodeError as error:
         raise KnowledgeBaseError("documentation Markdown is not UTF-8") from error
     metadata, content = parse_frontmatter(markdown.replace("\r\n", "\n"))
     if len(content) < 20:
-        raise KnowledgeBaseError("documentation Markdown has no useful content")
+        return html_fallback(entry, timeout=timeout, limiter=limiter)
     product, version, language = infer_route_metadata(entry.url)
     title = metadata.get("title", "").strip() or route_title(entry.url)
     space = metadata.get("space", "").strip() or product
@@ -429,7 +558,7 @@ def synchronize(
     timeout: float,
     full: bool,
 ) -> dict[str, Any]:
-    """Synchronize official Markdown pages into the local search index."""
+    """Synchronize official documentation pages into the local search index."""
     started_at = utc_now()
     entries = read_sitemap(sitemap_url, timeout=timeout)
     connection = connect_database(root, create=True)

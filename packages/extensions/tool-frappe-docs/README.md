@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package exposes bounded search, page-read, and index-status tools over official `docs.frappe.io` content. A deployment synchronizes the official sitemap and Markdown alternates into a local SQLite FTS5 index. Model calls never crawl the network, trigger synchronization, choose a host path, or write the index.
+This package exposes bounded search, page-read, and index-status tools over official `docs.frappe.io` content. A deployment synchronizes the official sitemap and prefers each page's Markdown alternate, with a same-origin HTML article or main-body fallback, into a local SQLite FTS5 index. Model calls never crawl the network, trigger synchronization, choose a host path, or write the index.
 
 The package complements, rather than replaces, runtime evidence. Questions about the deployed site use the active Native Bench source and Frappe metadata first. The documentation index explains official framework and product behavior, and every result retains its official URL, product route, version route, language, and update date.
 
@@ -45,7 +45,7 @@ python3 packages/extensions/tool-frappe-docs/python/frappe_docs_kb.py \
   --request-delay-ms 100
 ```
 
-Synchronization reads only the official `https://docs.frappe.io/sitemap.xml` origin and each page's `.md` alternate. It records failed pages without deleting an earlier good copy, skips unchanged sitemap dates on later runs, splits Markdown by heading, and preserves source attribution. The local database is not a Frappe database and synchronization does not create or alter a DocType.
+Synchronization reads only the official `https://docs.frappe.io/sitemap.xml` origin and official page routes. It prefers each `.md` alternate and falls back to the same route's `<article>` or `<main>` text when that alternate is unavailable, without indexing navigation, scripts, styles, headers, or footers. It records failed pages without deleting an earlier good copy, skips unchanged sitemap dates on later runs, splits content by heading, and preserves source attribution. The local database is not a Frappe database and synchronization does not create or alter a DocType.
 
 `frappe_docs_search` performs BM25 full-text retrieval with optional product, version, and language filters. `frappe_docs_get_page` reads one indexed page or heading with a caller-selected bound. `frappe_docs_status` reports corpus coverage and synchronization freshness. The generic Harness tool card is intentional because each result is already structured JSON with source links.
 

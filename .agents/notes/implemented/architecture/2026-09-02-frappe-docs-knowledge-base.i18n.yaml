@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-02-frappe-docs-knowledge-base.md
-2026-09-02-frappe-docs-knowledge-base.md: b0fb4c18dfc8adf364a1a1fc4cea2799300d4029
-2026-09-02-frappe-docs-knowledge-base.zh.md: 334c03a128d6d9e23e45e6aaa8f82330d6ab4972
+2026-09-02-frappe-docs-knowledge-base.md: 32ceee2a9f9ebc3bcca03441ceb85651652e5fd7
+2026-09-02-frappe-docs-knowledge-base.zh.md: 60d8153de9c1a5b8d4f525bbf90f4843e93028ba

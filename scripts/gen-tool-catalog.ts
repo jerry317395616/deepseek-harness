@@ -348,7 +348,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       })
     },
     note:
-      'The optional Bundle inserts this read-only tool row disabled. Deployments synchronize official docs.frappe.io Markdown pages outside model calls; the tools search and read the bounded local index while preserving product, version, update, and official URL metadata. Runtime behavior remains owned by active Native Bench source and site evidence.',
+      'The optional Bundle inserts this read-only tool row disabled. Deployments synchronize official docs.frappe.io text pages outside model calls, preferring Markdown and using bounded same-origin HTML body fallback; the tools search and read the local index while preserving product, version, update, and official URL metadata. Runtime behavior remains owned by active Native Bench source and site evidence.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',

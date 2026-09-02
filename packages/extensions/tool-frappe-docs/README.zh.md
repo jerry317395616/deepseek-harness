@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包为 `docs.frappe.io` 官方内容提供有界搜索、页面读取和索引状态工具。部署程序把官方站点地图及 Markdown 页面同步到本地 SQLite FTS5 索引。模型调用不会抓取网络、触发同步、选择主机路径或写入索引。
+本包为 `docs.frappe.io` 官方内容提供有界搜索、页面读取和索引状态工具。部署程序按照官方站点地图同步页面，并优先读取 Markdown 版本；如果没有 Markdown 版本，则读取同源 HTML 的文章或主要正文，写入本地 SQLite FTS5 索引。模型调用不会抓取网络、触发同步、选择主机路径或写入索引。
 
 本包用于补充运行证据，而不是取代运行证据。涉及已部署站点的问题应先检查当前 Native Bench 源码和 Frappe 元数据；文档索引用来解释框架和产品的官方行为。每条结果都会保留官方链接、产品路径、版本路径、语言和更新时间。
 
@@ -45,7 +45,7 @@ python3 packages/extensions/tool-frappe-docs/python/frappe_docs_kb.py \
   --request-delay-ms 100
 ```
 
-同步程序只读取官方 `https://docs.frappe.io/sitemap.xml` 来源及每个页面的 `.md` 版本。同步失败会保留旧的可用页面；后续运行会按站点地图日期跳过未变化页面，并按标题切分 Markdown、保留来源信息。本地数据库不是 Frappe 数据库，同步过程不会新增或修改 DocType。
+同步程序只读取官方 `https://docs.frappe.io/sitemap.xml` 来源和官方页面路径。它优先读取每个页面的 `.md` 版本；该版本不可用时，读取同一路径中的 `<article>` 或 `<main>` 正文，不索引导航、脚本、样式、页眉或页脚。同步失败会保留旧的可用页面；后续运行会按站点地图日期跳过未变化页面，并按标题切分内容、保留来源信息。本地数据库不是 Frappe 数据库，同步过程不会新增或修改 DocType。
 
 `frappe_docs_search` 使用 BM25 全文检索，并支持产品、版本和语言筛选。`frappe_docs_get_page` 在指定上限内读取一个已索引页面或章节。`frappe_docs_status` 返回文档覆盖范围和最近同步状态。工具使用 Harness 通用卡片，因为返回值已经是包含来源链接的结构化 JSON。
 
