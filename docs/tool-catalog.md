@@ -23,7 +23,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`, `cordis_inspect_list`, `cordis_inspect_query`, `cordis_inspect_self`, `cordis_run`, `cordis_stop`, `cordis_undefine` | `ctx.tools`, `ctx.dynamicCordisRunner` | `tool/call`, `tool/result`, `process-local dynamic package lifecycle` | - | Not in any shipped tree (a deliberate opt-in — dynamic package code reaches the real runtime, see .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md). The toolset injects `ctx.dynamicCordisRunner` from `@deepseek-ai/dsh-cordis-host-runner`, which owns the definition registry and the vm sandbox; a composition missing it never activates the tools. A running package may register ADDITIONAL model-visible tools until it is stopped, undefined, or DSH restarts; a full changed request header logs those tool-set changes. |
 | `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`, `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_explain_nutrition_standard`, `tongjianyun_get_weekly_nutrition_analysis`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_publish_report`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.credentials (MCP compatibility mode only)` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments run the three read-only nutrition operations directly in the configured Bench Python/Frappe context and keep MCP as an explicit compatibility mode for writes; the latter requires an authenticated endpoint and credential reference. A fixed routing section requires source evidence before current data, while publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
 | `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`, `native_bench_runtime_status`, `native_bench_search_code` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.fs` | `tool/call`, `tool/result` | - | The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench. |
-| `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_get_document`, `native_bench_frappe_list_documents` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments expose bounded, permission-aware Frappe ORM list/get reads for permitted DocTypes in the configured Bench. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL or Python. |
+| `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_apply_document_update`, `native_bench_frappe_describe_doctype`, `native_bench_frappe_get_document`, `native_bench_frappe_list_documents`, `native_bench_frappe_platform_catalog`, `native_bench_frappe_preview_document_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess` | `tool/call`, `approved existing Frappe business-document field values`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments expose a live platform catalog, safe metadata, permission-aware reads, and previewed one-shot-approved scalar updates to existing business documents. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL, Python, or DocType schema changes. |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent pwsh tool, the Windows counterpart of the persistent bash tool; deployment composition supplies a pwsh-dialect PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
@@ -946,6 +946,62 @@ The package is an explicit deployment opt-in. It searches and reads only the con
 
 ## `@deepseek-ai/dsh-tool-native-bench-frappe`
 
+### `native_bench_frappe_apply_document_update`
+
+经用户一次性批准后应用此前预览的 Frappe 业务文档标量字段修改。必须传入完全相同的 changes 和 preview_id；记录或请求变化会使执行失败。运行 Frappe 权限、validate、hooks 和常规版本记录。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doctype": {
+      "type": "string",
+      "description": "与预览完全相同的业务 DocType。"
+    },
+    "name": {
+      "type": "string",
+      "description": "与预览完全相同的记录名称或编号。"
+    },
+    "changes": {
+      "description": "与预览完全相同的标量字段对象。"
+    },
+    "preview_id": {
+      "type": "string",
+      "description": "预览工具返回的64位 preview_id。"
+    }
+  },
+  "required": [
+    "doctype",
+    "name",
+    "changes",
+    "preview_id"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+### `native_bench_frappe_describe_doctype`
+
+读取一个允许访问的 Frappe DocType 的安全元数据，包括模块、字段、字段类型以及当前账号权限。敏感字段不会返回，只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doctype": {
+      "type": "string",
+      "description": "Frappe DocType 名称。"
+    }
+  },
+  "required": [
+    "doctype"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
 ### `native_bench_frappe_get_document`
 
 在当前 Native Bench 的 Frappe 站点中按权限读取一个允许的 DocType 记录。支持字段选择和敏感字段脱敏；禁止任意 SQL，只读。
@@ -1014,7 +1070,59 @@ Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../package
 
 Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
 
-The optional Bundle inserts this tool row disabled. Native deployments expose bounded, permission-aware Frappe ORM list/get reads for permitted DocTypes in the configured Bench. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL or Python.
+### `native_bench_frappe_platform_catalog`
+
+读取当前 Native Bench 站点的已安装应用和当前 Frappe 账号可读取的 DocType 目录，并标注读、写和新建权限。目录来自实时 Frappe 元数据，不读取密码或密钥。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "keyword": {
+      "type": "string",
+      "description": "可选 DocType 或模块名称关键词，支持中文。"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "最多返回的 DocType 数量，1至1000，默认500。"
+    }
+  }
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+### `native_bench_frappe_preview_document_update`
+
+预览对一个现有 Frappe 业务文档的标量字段修改。只读取并校验当前记录、字段和写权限，不写数据库；返回绑定当前 modified 状态和请求值的 preview_id。禁止结构、权限、子表和敏感字段变更。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "doctype": {
+      "type": "string",
+      "description": "现有业务 DocType 名称。"
+    },
+    "name": {
+      "type": "string",
+      "description": "现有记录名称或编号。"
+    },
+    "changes": {
+      "description": "拟修改的标量字段对象，1至32个字段；不接受子表、SQL 或 Python。"
+    }
+  },
+  "required": [
+    "doctype",
+    "name",
+    "changes"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+
+The optional Bundle inserts this tool row disabled. Native deployments expose a live platform catalog, safe metadata, permission-aware reads, and previewed one-shot-approved scalar updates to existing business documents. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL, Python, or DocType schema changes.
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

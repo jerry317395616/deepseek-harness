@@ -1,21 +1,33 @@
-"""Bounded, permission-aware read bridge into the active Native Bench Frappe site.
+"""Bounded Frappe platform bridge for the active Native Bench site.
 
-This helper intentionally exposes only Frappe ORM list/get operations. It never
-accepts SQL, Python source, a site path, or a model-selected Frappe user. The
-deployment-owned account and the Frappe permission layer remain authoritative.
+The helper exposes metadata discovery, permission-aware reads, and an
+approval-oriented existing-document update pair. It never accepts SQL, Python
+source, a site path, or a model-selected Frappe user. The deployment-owned
+account, Frappe permissions, document validation, hooks, and transaction
+handling remain authoritative.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import hmac
 import json
+import os
 import re
 import sys
 from pathlib import Path
 from typing import Any
 
 
-ALLOWED_OPERATIONS = {"frappe_list_documents", "frappe_get_document"}
+ALLOWED_OPERATIONS = {
+    "frappe_platform_catalog",
+    "frappe_describe_doctype",
+    "frappe_list_documents",
+    "frappe_get_document",
+    "frappe_preview_document_update",
+    "frappe_apply_document_update",
+}
 SITE_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 FIELD_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 ORDER_PATTERN = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(?:\s+(?:asc|desc))?$", re.IGNORECASE)
@@ -25,6 +37,8 @@ MAX_FILTERS = 32
 MAX_ROWS = 100
 MAX_START = 100_000
 MAX_STRING_LENGTH = 2_048
+MAX_CHANGE_FIELDS = 32
+MAX_CHANGE_STRING_LENGTH = 20_000
 SENSITIVE_FIELD_PATTERN = re.compile(
     r"(?:password|secret|token|api[_-]?key|api[_-]?secret|credential|authorization|private[_-]?key)",
     re.IGNORECASE,
@@ -42,6 +56,8 @@ DENIED_DOCTYPES = {
     "connected app",
     "custom field",
     "custom docperm",
+    "deleted document",
+    "docfield",
     "doctype",
     "docperm",
     "email account",
@@ -62,6 +78,7 @@ DENIED_DOCTYPES = {
     "role",
     "role profile",
     "role profile role",
+    "role permission for page and report",
     "scheduled job log",
     "session default settings",
     "social login key",
@@ -71,9 +88,51 @@ DENIED_DOCTYPES = {
     "webhook",
 }
 
+IMMUTABLE_FIELDS = {
+    "name",
+    "owner",
+    "creation",
+    "modified",
+    "modified_by",
+    "docstatus",
+    "idx",
+    "parent",
+    "parentfield",
+    "parenttype",
+    "doctype",
+}
+
+WRITABLE_FIELD_TYPES = {
+    "Autocomplete",
+    "Check",
+    "Color",
+    "Currency",
+    "Data",
+    "Date",
+    "Datetime",
+    "Duration",
+    "Dynamic Link",
+    "Float",
+    "Geolocation",
+    "HTML Editor",
+    "Int",
+    "Link",
+    "Long Text",
+    "Markdown Editor",
+    "Percent",
+    "Phone",
+    "Rating",
+    "Select",
+    "Signature",
+    "Small Text",
+    "Text",
+    "Text Editor",
+    "Time",
+}
+
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Native Harness Frappe ORM read bridge")
+    parser = argparse.ArgumentParser(description="Native Harness Frappe platform bridge")
     parser.add_argument("--bench-root", required=True)
     parser.add_argument("--site", required=True)
     parser.add_argument("--user", required=True)
@@ -117,15 +176,23 @@ def main() -> int:
     sys.path.insert(0, str(bench_root / "apps"))
 
     frappe = None
+    previous_cwd = Path.cwd()
     try:
+        # Frappe derives log, config, and asset paths from the active Bench.
+        os.chdir(bench_root)
         import frappe
 
         frappe.init(site=args.site, sites_path=str(sites_path))
         frappe.connect()
         frappe.set_user(args.user)
-        result = run_operation(frappe, args.operation, normalized)
+        result = run_operation(frappe, args.operation, normalized, args.user)
         return emit_ok(result, args.max_output_bytes)
     except Exception as exc:  # Frappe errors become structured, bounded failures.
+        if frappe is not None:
+            try:
+                frappe.db.rollback()
+            except Exception:
+                pass
         return emit_error(str(exc))
     finally:
         if frappe is not None:
@@ -133,9 +200,19 @@ def main() -> int:
                 frappe.destroy()
             except Exception:
                 pass
+        os.chdir(previous_cwd)
 
 
 def normalize_arguments(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
+    if operation == "frappe_platform_catalog":
+        keyword = arguments.get("keyword", "")
+        if not isinstance(keyword, str) or len(keyword) > 140 or "\n" in keyword or "\r" in keyword:
+            raise ValueError("keyword must be a single string of at most 140 characters")
+        limit = arguments.get("limit", 500)
+        if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1 or limit > 1000:
+            raise ValueError("limit must be an integer from 1 to 1000")
+        return {"keyword": keyword.strip(), "limit": limit}
+
     doctype = arguments.get("doctype")
     if not isinstance(doctype, str) or not doctype.strip() or len(doctype) > 140 or "\n" in doctype or "\r" in doctype:
         raise ValueError("doctype must be a single non-empty name")
@@ -144,6 +221,23 @@ def normalize_arguments(operation: str, arguments: dict[str, Any]) -> dict[str, 
         raise ValueError("this DocType is protected and cannot be read through the generic bridge")
     if doctype.startswith("__"):
         raise ValueError("internal DocTypes are not available")
+
+    if operation == "frappe_describe_doctype":
+        return {"doctype": doctype}
+
+    if operation in {"frappe_preview_document_update", "frappe_apply_document_update"}:
+        name = arguments.get("name")
+        if not isinstance(name, str) or not name.strip() or len(name) > 140 or "\n" in name or "\r" in name:
+            raise ValueError("document name must be a single non-empty name")
+        changes = arguments.get("changes")
+        validate_changes(changes)
+        normalized = {"doctype": doctype, "name": name.strip(), "changes": changes}
+        if operation == "frappe_apply_document_update":
+            preview_id = arguments.get("preview_id")
+            if not isinstance(preview_id, str) or not re.fullmatch(r"[a-f0-9]{64}", preview_id):
+                raise ValueError("preview_id must be the 64-character id returned by preview")
+            normalized["preview_id"] = preview_id
+        return normalized
 
     fields = arguments.get("fields", ["name"])
     validate_fields(fields)
@@ -172,6 +266,25 @@ def normalize_arguments(operation: str, arguments: dict[str, Any]) -> dict[str, 
             raise ValueError("document name must be a single non-empty name")
         normalized["name"] = name.strip()
     return normalized
+
+
+def validate_changes(value: Any) -> None:
+    if not isinstance(value, dict) or not value or len(value) > MAX_CHANGE_FIELDS:
+        raise ValueError("changes must be an object with 1 to 32 fields")
+    for field, field_value in value.items():
+        if (
+            not isinstance(field, str)
+            or not FIELD_PATTERN.fullmatch(field)
+            or field in IMMUTABLE_FIELDS
+            or SENSITIVE_FIELD_PATTERN.search(field)
+        ):
+            raise ValueError("changes contain an unsupported, immutable, or sensitive field")
+        if isinstance(field_value, (dict, list)):
+            raise ValueError("changes accept scalar field values only; child tables require an application service")
+        if not isinstance(field_value, (str, int, float, bool)) and field_value is not None:
+            raise ValueError("changes accept JSON scalar values only")
+        if isinstance(field_value, str) and len(field_value) > MAX_CHANGE_STRING_LENGTH:
+            raise ValueError("a changed string exceeds the 20000-character limit")
 
 
 def validate_fields(value: Any) -> None:
@@ -216,8 +329,41 @@ def validate_filter_value(value: Any) -> None:
         raise ValueError("filter values must be JSON scalars or scalar arrays")
 
 
-def run_operation(frappe: Any, operation: str, arguments: dict[str, Any]) -> Any:
+def run_operation(frappe: Any, operation: str, arguments: dict[str, Any], frappe_user: str) -> Any:
+    if operation == "frappe_platform_catalog":
+        return platform_catalog(frappe, arguments)
+
     doctype = arguments["doctype"]
+    if operation == "frappe_describe_doctype":
+        return describe_doctype(frappe, doctype)
+
+    if operation in {"frappe_preview_document_update", "frappe_apply_document_update"}:
+        preview = build_update_preview(frappe, doctype, arguments["name"], arguments["changes"], frappe_user)
+        if operation == "frappe_preview_document_update":
+            return preview
+        if not hmac.compare_digest(preview["preview_id"], arguments["preview_id"]):
+            raise ValueError("document or requested values changed after preview; create a new preview")
+        doc = frappe.get_doc(doctype, arguments["name"])
+        doc.check_permission("write")
+        for field, value in arguments["changes"].items():
+            doc.set(field, value)
+        doc.save()
+        frappe.db.commit()
+        doc.reload()
+        return {
+            "operation": "update",
+            "site": frappe.local.site,
+            "frappe_user": frappe_user,
+            "doctype": doctype,
+            "name": doc.name,
+            "preview_id": preview["preview_id"],
+            "changed_fields": sorted(arguments["changes"]),
+            "before": preview["before"],
+            "after": sanitize({field: doc.get(field) for field in arguments["changes"]}),
+            "modified": str(doc.modified),
+            "audit": "The approved tool call and result remain in the Harness session log; Frappe save hooks and Version tracking run normally.",
+        }
+
     if not frappe.has_permission(doctype, ptype="read"):
         raise PermissionError(f"Frappe user has no read permission for DocType: {doctype}")
     fields = arguments["fields"]
@@ -242,6 +388,156 @@ def run_operation(frappe: Any, operation: str, arguments: dict[str, Any]) -> Any
         limit_page_length=1,
     )
     return {"doctype": doctype, "name": arguments["name"], "document": sanitize(rows[0]) if rows else None}
+
+
+def platform_catalog(frappe: Any, arguments: dict[str, Any]) -> dict[str, Any]:
+    from frappe.utils.change_log import get_versions
+
+    keyword = arguments["keyword"].casefold()
+    limit = arguments["limit"]
+    candidates = frappe.get_all(
+        "DocType",
+        filters={"istable": 0},
+        fields=["name", "module", "custom", "is_submittable", "issingle"],
+        order_by="module asc, name asc",
+        limit_page_length=5000,
+    )
+    readable = []
+    for row in candidates:
+        name = str(row.get("name") or "")
+        module = str(row.get("module") or "")
+        if not name or name.casefold() in DENIED_DOCTYPES or name.startswith("__"):
+            continue
+        if keyword and keyword not in name.casefold() and keyword not in module.casefold():
+            continue
+        if not frappe.has_permission(name, ptype="read"):
+            continue
+        readable.append({
+            "name": name,
+            "module": module,
+            "custom": bool(row.get("custom")),
+            "is_submittable": bool(row.get("is_submittable")),
+            "is_single": bool(row.get("issingle")),
+            "can_read": True,
+            "can_write": bool(frappe.has_permission(name, ptype="write")),
+            "can_create": bool(frappe.has_permission(name, ptype="create")),
+        })
+    versions = get_versions()
+    installed_apps = []
+    for app in frappe.get_installed_apps():
+        version = versions.get(app, {}) if isinstance(versions, dict) else {}
+        installed_apps.append({
+            "name": app,
+            "version": str(version.get("version") or "") if isinstance(version, dict) else "",
+            "branch": str(version.get("branch") or "") if isinstance(version, dict) else "",
+        })
+    return {
+        "site": frappe.local.site,
+        "frappe_user": frappe.session.user,
+        "installed_apps": installed_apps,
+        "doctypes": readable[:limit],
+        "total_matching_doctypes": len(readable),
+        "truncated": len(readable) > limit,
+        "source_of_truth": "Frappe installed-app registry, DocType metadata, and current user permissions",
+    }
+
+
+def describe_doctype(frappe: Any, doctype: str) -> dict[str, Any]:
+    if not frappe.has_permission(doctype, ptype="read"):
+        raise PermissionError(f"Frappe user has no read permission for DocType: {doctype}")
+    meta = frappe.get_meta(doctype)
+    fields = []
+    for field in meta.fields:
+        fieldname = str(field.fieldname or "")
+        if not fieldname or SENSITIVE_FIELD_PATTERN.search(fieldname):
+            continue
+        fields.append({
+            "fieldname": fieldname,
+            "label": str(field.label or ""),
+            "fieldtype": str(field.fieldtype or ""),
+            "options": safe_options(str(field.options or ""), str(field.fieldtype or "")),
+            "required": bool(field.reqd),
+            "read_only": bool(field.read_only),
+            "hidden": bool(field.hidden),
+        })
+    return {
+        "site": frappe.local.site,
+        "frappe_user": frappe.session.user,
+        "doctype": doctype,
+        "module": str(meta.module or ""),
+        "custom": bool(meta.custom),
+        "is_single": bool(meta.issingle),
+        "is_submittable": bool(meta.is_submittable),
+        "permissions": {
+            "read": True,
+            "write": bool(frappe.has_permission(doctype, ptype="write")),
+            "create": bool(frappe.has_permission(doctype, ptype="create")),
+            "delete": bool(frappe.has_permission(doctype, ptype="delete")),
+            "submit": bool(frappe.has_permission(doctype, ptype="submit")) if meta.is_submittable else False,
+        },
+        "fields": fields,
+    }
+
+
+def safe_options(options: str, fieldtype: str) -> str:
+    if fieldtype in {"Link", "Dynamic Link", "Table", "Table MultiSelect", "Select"}:
+        return options[:MAX_STRING_LENGTH]
+    return ""
+
+
+def build_update_preview(
+    frappe: Any,
+    doctype: str,
+    name: str,
+    changes: dict[str, Any],
+    frappe_user: str,
+) -> dict[str, Any]:
+    doc = frappe.get_doc(doctype, name)
+    doc.check_permission("write")
+    meta = frappe.get_meta(doctype)
+    before = {}
+    after = {}
+    changed_fields = []
+    for fieldname, value in changes.items():
+        field = meta.get_field(fieldname)
+        if field is None:
+            raise ValueError(f"field does not exist on {doctype}: {fieldname}")
+        if field.read_only or field.hidden or field.fieldtype not in WRITABLE_FIELD_TYPES:
+            raise ValueError(f"field is not available for controlled scalar updates: {fieldname}")
+        current = sanitize(doc.get(fieldname), fieldname)
+        requested = sanitize(value, fieldname)
+        before[fieldname] = current
+        after[fieldname] = requested
+        if current != requested:
+            changed_fields.append(fieldname)
+    if not changed_fields:
+        raise ValueError("the requested update does not change any field")
+    witness = {
+        "site": frappe.local.site,
+        "frappe_user": frappe_user,
+        "doctype": doctype,
+        "name": name,
+        "modified": str(doc.modified),
+        "before": before,
+        "changes": changes,
+    }
+    preview_id = hashlib.sha256(
+        json.dumps(witness, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
+    ).hexdigest()
+    return {
+        "operation": "update",
+        "site": frappe.local.site,
+        "frappe_user": frappe_user,
+        "doctype": doctype,
+        "name": name,
+        "preview_id": preview_id,
+        "changed_fields": sorted(changed_fields),
+        "before": before,
+        "after": after,
+        "modified": str(doc.modified),
+        "requires_user_approval": True,
+        "expires_when": "The document modified timestamp or requested values change.",
+    }
 
 
 def sanitize(value: Any, key: str | None = None, depth: int = 0) -> Any:

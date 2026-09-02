@@ -1,4 +1,4 @@
-/** Native Frappe transport for bounded, permission-aware Bench reads. */
+/** Native Frappe transport for bounded Bench discovery, reads, and approved updates. */
 
 import { fileURLToPath } from 'node:url'
 import { isAbsolute, join, resolve } from 'node:path'
@@ -11,9 +11,13 @@ import type {
 } from '@deepseek-ai/dsh-subprocess'
 
 /** Operations exposed by the local Frappe helper. */
-export const NATIVE_READ_OPERATIONS = new Set([
+export const NATIVE_FRAPPE_OPERATIONS = new Set([
+  'frappe_platform_catalog',
+  'frappe_describe_doctype',
   'frappe_list_documents',
   'frappe_get_document',
+  'frappe_preview_document_update',
+  'frappe_apply_document_update',
 ])
 
 /** Fixed, deployment-owned native Frappe process configuration. */
@@ -74,21 +78,21 @@ export function resolveNativeFrappeSpec(config: {
   }
 }
 
-/** Run permission-aware Frappe reads in the active Bench process. */
+/** Run one allowlisted Frappe operation in the active Bench process. */
 export class NativeFrappeClient {
   constructor(
     private readonly ctx: Context,
     private readonly spec: NativeFrappeSpec,
   ) {}
 
-  /** Execute one bounded read operation without a network hop or raw SQL. */
+  /** Execute one bounded operation without a network hop, raw SQL, or Python input. */
   async call(
     operation: string,
     arguments_: Record<string, JsonValue>,
     signal: AbortSignal,
   ): Promise<JsonValue> {
-    if (!NATIVE_READ_OPERATIONS.has(operation)) {
-      throw new Error('native-bench-frappe: only allowlisted read operations are available')
+    if (!NATIVE_FRAPPE_OPERATIONS.has(operation)) {
+      throw new Error('native-bench-frappe: only allowlisted Frappe operations are available')
     }
     if (signal.aborted) throw new Error('native-bench-frappe: Frappe request was cancelled')
     const payload = JSON.stringify({ arguments: normalizeArguments(operation, arguments_) })
@@ -157,15 +161,43 @@ export class NativeFrappeClient {
 /** Validate the small model-facing envelope before sending it to Python. */
 function normalizeArguments(operation: string, arguments_: Record<string, JsonValue>): Record<string, JsonValue> {
   const result = { ...arguments_ }
+  if (operation === 'frappe_platform_catalog') {
+    const keyword = result.keyword
+    if (keyword !== undefined && (typeof keyword !== 'string' || keyword.length > 140 || /[\r\n]/u.test(keyword))) {
+      throw new Error('native-bench-frappe: keyword must be a single string of at most 140 characters')
+    }
+    const limit = result.limit
+    if (limit !== undefined && (typeof limit !== 'number' || !Number.isInteger(limit) || limit < 1 || limit > 1000)) {
+      throw new Error('native-bench-frappe: catalog limit must be an integer from 1 to 1000')
+    }
+    if (typeof keyword === 'string') result.keyword = keyword.trim()
+    return result
+  }
   const doctype = result.doctype
   if (typeof doctype !== 'string' || doctype.trim() === '' || doctype.length > 140 || /[\r\n]/u.test(doctype)) {
     throw new Error('native-bench-frappe: doctype must be a single non-empty name')
   }
-  if (operation === 'frappe_get_document') {
+  if (operation === 'frappe_get_document' || operation === 'frappe_preview_document_update' || operation === 'frappe_apply_document_update') {
     const name = result.name
     if (typeof name !== 'string' || name.trim() === '' || name.length > 140 || /[\r\n]/u.test(name)) {
       throw new Error('native-bench-frappe: document name must be a single non-empty name')
     }
+  }
+  if (operation === 'frappe_describe_doctype') {
+    result.doctype = doctype.trim()
+    return result
+  }
+  if (operation === 'frappe_preview_document_update' || operation === 'frappe_apply_document_update') {
+    validateChanges(result.changes)
+    if (operation === 'frappe_apply_document_update') {
+      const previewId = result.preview_id
+      if (typeof previewId !== 'string' || !/^[a-f0-9]{64}$/u.test(previewId)) {
+        throw new Error('native-bench-frappe: preview_id must be the 64-character id returned by preview')
+      }
+    }
+    result.doctype = doctype.trim()
+    result.name = (result.name as string).trim()
+    return result
   }
   if (result.fields !== undefined) validateFields(result.fields)
   if (result.filters !== undefined) validateFilters(result.filters)
@@ -185,6 +217,30 @@ function normalizeArguments(operation: string, arguments_: Record<string, JsonVa
   if (typeof result.order_by === 'string') result.order_by = result.order_by.trim()
   return result
 }
+
+function validateChanges(value: JsonValue | undefined): void {
+  if (!isRecord(value)) throw new Error('native-bench-frappe: changes must be an object')
+  const entries = Object.entries(value)
+  if (entries.length === 0 || entries.length > 32) {
+    throw new Error('native-bench-frappe: changes must contain 1 to 32 fields')
+  }
+  for (const [field, fieldValue] of entries) {
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(field) || isSensitive(field) || IMMUTABLE_FIELDS.has(field)) {
+      throw new Error('native-bench-frappe: changes contain an unsupported, immutable, or sensitive field')
+    }
+    if (Array.isArray(fieldValue) || isRecord(fieldValue)) {
+      throw new Error('native-bench-frappe: changes accept scalar values only')
+    }
+    if (typeof fieldValue === 'string' && fieldValue.length > 20_000) {
+      throw new Error('native-bench-frappe: a changed string exceeds the 20000-character limit')
+    }
+  }
+}
+
+const IMMUTABLE_FIELDS = new Set([
+  'name', 'owner', 'creation', 'modified', 'modified_by', 'docstatus', 'idx',
+  'parent', 'parentfield', 'parenttype', 'doctype',
+])
 
 function validateFields(value: JsonValue): void {
   if (!Array.isArray(value) || value.length === 0 || value.length > 64) throw new Error('native-bench-frappe: fields must be a non-empty array of at most 64 names')

@@ -322,7 +322,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
     dir: 'tool-native-bench-frappe',
     source: 'packages/extensions/tool-native-bench-frappe/src/index.ts',
     requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.subprocess'],
-    writes: ['tool/call', 'tool/result'],
+    writes: ['tool/call', 'approved existing Frappe business-document field values', 'tool/result'],
     async mount(ctx) {
       await ctx.plugin(LocalSubprocessRuntime)
       await ctx.plugin(ToolNativeBenchFrappe, {
@@ -331,7 +331,7 @@ const TOOL_PACKAGES: ToolPackage[] = [
       })
     },
     note:
-      'The optional Bundle inserts this tool row disabled. Native deployments expose bounded, permission-aware Frappe ORM list/get reads for permitted DocTypes in the configured Bench. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL or Python.',
+      'The optional Bundle inserts this tool row disabled. Native deployments expose a live platform catalog, safe metadata, permission-aware reads, and previewed one-shot-approved scalar updates to existing business documents. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL, Python, or DocType schema changes.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',

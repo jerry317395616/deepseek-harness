@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-tool-native-bench-frappe",
-  "description": "Permission-aware Native Bench Frappe ORM read tools for I-ONE Harness",
+  "description": "Native Bench Frappe discovery, permission-aware reads, and approved scalar updates for I-ONE Harness",
   "version": "0.1.1-rc.2",
   "publishConfig": {
     "access": "public"
@@ -44,7 +44,10 @@
     "@deepseek-ai/schemastery": "workspace:^"
   },
   "devDependencies": {
+    "@deepseek-ai/cordis-plugin-include": "workspace:^",
+    "@deepseek-ai/cordis-plugin-loader": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-llm": "workspace:^",
     "@deepseek-ai/dsh-subprocess": "workspace:^",
     "@deepseek-ai/dsh-subprocess-local": "workspace:^",
     "@deepseek-ai/dsh-system-prompt": "workspace:^",

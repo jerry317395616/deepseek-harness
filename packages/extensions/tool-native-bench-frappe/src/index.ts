@@ -1,11 +1,13 @@
 /**
- * Permission-aware, read-only Frappe ORM tools for the active Native Bench.
+ * Permission-aware Frappe discovery, ORM reads, and approved scalar updates
+ * for the active Native Bench.
  * @module @deepseek-ai/dsh-tool-native-bench-frappe
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import type { PreToolDecision } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-subprocess'
 import type {} from '@deepseek-ai/dsh-system-prompt'
@@ -14,7 +16,7 @@ import { NativeFrappeClient, resolveNativeFrappeSpec } from './native.ts'
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'tool-native-bench-frappe'
 
-/** Services required for local Frappe reads and model-facing routing guidance. */
+/** Services required for local Frappe operations and model-facing routing guidance. */
 export const inject = ['tools', 'systemPrompt', 'subprocess']
 
 /** Deployment-owned configuration for the active Native Bench Frappe site. */
@@ -31,7 +33,7 @@ export interface Config {
   maxOutputBytes?: number
   /** Maximum serialized model arguments sent to the helper. */
   maxInputBytes?: number
-  /** Cooperative timeout budget for one Frappe read. */
+  /** Cooperative timeout budget for one Frappe operation. */
   timeoutMs: number
 }
 
@@ -46,7 +48,7 @@ export const Config: z<Config> = z.object({
   timeoutMs: z.number().step(1).min(1_000).max(120_000).default(30_000),
 })
 
-/** Register bounded, read-only Frappe ORM tools over all permitted DocTypes. */
+/** Register bounded Frappe platform tools over all permitted DocTypes. */
 export function apply(ctx: Context, config: Config): void {
   const resolved = resolveNativeFrappeSpec(config)
   const client = new NativeFrappeClient(ctx, resolved)
@@ -56,18 +58,60 @@ export function apply(ctx: Context, config: Config): void {
     order: 114,
     text: [
       'Native Bench Frappe 数据规则：',
-      '- 需要查询 Native Bench 数据库时，使用 native_bench_frappe_list_documents 或 native_bench_frappe_get_document；这些工具直接在配置的 Frappe 站点 ORM 上下文中执行。',
+      '- 先用 native_bench_frappe_platform_catalog 确认站点、安装应用和可访问 DocType；用 native_bench_frappe_describe_doctype 读取字段与当前账号权限。',
+      '- 需要查询业务文档时，使用 native_bench_frappe_list_documents 或 native_bench_frappe_get_document；这些工具直接在配置的 Frappe 站点 ORM 上下文中执行。',
       '- 工具遵守固定 Frappe 用户的权限和服务端 DocType 拒绝列表；不会执行任意 SQL、Python、站点路径或模型提供的用户。',
       '- 查询字段、过滤条件和排序必须使用结构化参数；结果有行数、字段、输入和输出上限，敏感字段会脱敏。',
+      '- 用户明确要求修改现有业务记录时，必须先调用 native_bench_frappe_preview_document_update；只有用户批准完全相同的预览后，才能调用 native_bench_frappe_apply_document_update。执行工具会再次校验预览、权限、字段、文档版本，并运行 Frappe validate、hooks 与 Version 记录。',
+      '- 受控写入只支持现有业务文档的标量字段；不得修改 DocType、Custom Field、Property Setter、权限结构、子表或数据库结构。',
       '- 询问童健云营养业务时，先用 Native Bench 源码工具，再使用童健云营养专用工具；通用 Frappe 工具用于其他应用和 DocType。',
-      '- 数据库写入、源码修改和运行环境变更必须使用单独的受控管理流程，不得把只读工具当作写入接口。',
+      '- 源码修改和运行环境变更必须使用 Git 分支、差异审查、测试、用户批准和可回滚部署流程，不得直接改生产源码。',
     ].join('\n'),
   }))
+
+  ctx.on('tools/pre-execute', async (execution, next): Promise<PreToolDecision> => {
+    if (execution.name !== 'native_bench_frappe_apply_document_update') return next()
+    return {
+      kind: 'ask',
+      reason: '将按已生成的预览修改 Frappe 业务记录；该操作会运行文档校验与 hooks，并写入数据库。',
+    }
+  })
 
   const output = {
     schema: { type: 'json' as const },
     render: (_arguments: unknown, value: JsonValue) => [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
   }
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'native_bench_frappe_platform_catalog',
+    description: '读取当前 Native Bench 站点的已安装应用和当前 Frappe 账号可读取的 DocType 目录，并标注读、写和新建权限。目录来自实时 Frappe 元数据，不读取密码或密钥。',
+    parameters: {
+      keyword: { type: 'string', description: '可选 DocType 或模块名称关键词，支持中文。' },
+      limit: { type: 'integer', description: '最多返回的 DocType 数量，1至1000，默认500。' },
+    },
+    output,
+    timeoutMs: config.timeoutMs,
+    execute: (arguments_, exec) => client.call(
+      'frappe_platform_catalog',
+      arguments_ as Record<string, JsonValue>,
+      exec.signal,
+    ),
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'native_bench_frappe_describe_doctype',
+    description: '读取一个允许访问的 Frappe DocType 的安全元数据，包括模块、字段、字段类型以及当前账号权限。敏感字段不会返回，只读。',
+    parameters: {
+      doctype: { type: 'string', required: true, description: 'Frappe DocType 名称。' },
+    },
+    output,
+    timeoutMs: config.timeoutMs,
+    execute: (arguments_, exec) => client.call(
+      'frappe_describe_doctype',
+      arguments_ as Record<string, JsonValue>,
+      exec.signal,
+    ),
+  })))
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'native_bench_frappe_list_documents',
@@ -101,6 +145,41 @@ export function apply(ctx: Context, config: Config): void {
     timeoutMs: config.timeoutMs,
     execute: (arguments_, exec) => client.call(
       'frappe_get_document',
+      arguments_ as Record<string, JsonValue>,
+      exec.signal,
+    ),
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'native_bench_frappe_preview_document_update',
+    description: '预览对一个现有 Frappe 业务文档的标量字段修改。只读取并校验当前记录、字段和写权限，不写数据库；返回绑定当前 modified 状态和请求值的 preview_id。禁止结构、权限、子表和敏感字段变更。',
+    parameters: {
+      doctype: { type: 'string', required: true, description: '现有业务 DocType 名称。' },
+      name: { type: 'string', required: true, description: '现有记录名称或编号。' },
+      changes: { type: 'json', required: true, description: '拟修改的标量字段对象，1至32个字段；不接受子表、SQL 或 Python。' },
+    },
+    output,
+    timeoutMs: config.timeoutMs,
+    execute: (arguments_, exec) => client.call(
+      'frappe_preview_document_update',
+      arguments_ as Record<string, JsonValue>,
+      exec.signal,
+    ),
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'native_bench_frappe_apply_document_update',
+    description: '经用户一次性批准后应用此前预览的 Frappe 业务文档标量字段修改。必须传入完全相同的 changes 和 preview_id；记录或请求变化会使执行失败。运行 Frappe 权限、validate、hooks 和常规版本记录。',
+    parameters: {
+      doctype: { type: 'string', required: true, description: '与预览完全相同的业务 DocType。' },
+      name: { type: 'string', required: true, description: '与预览完全相同的记录名称或编号。' },
+      changes: { type: 'json', required: true, description: '与预览完全相同的标量字段对象。' },
+      preview_id: { type: 'string', required: true, description: '预览工具返回的64位 preview_id。' },
+    },
+    output,
+    timeoutMs: config.timeoutMs,
+    execute: (arguments_, exec) => client.call(
+      'frappe_apply_document_update',
       arguments_ as Record<string, JsonValue>,
       exec.signal,
     ),

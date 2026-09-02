@@ -1,4 +1,4 @@
-/** Composition and policy tests for generic Native Bench Frappe reads. */
+/** Composition and policy tests for Native Bench Frappe platform operations. */
 
 import type { Context } from '@deepseek-ai/cordis'
 import { Context as CordisContext } from '@deepseek-ai/cordis'
@@ -82,6 +82,26 @@ function execute(ctx: Context, call: string, name: string, arguments_: Record<st
 }
 
 describe('Native Bench generic Frappe composition', () => {
+  it('routes platform catalog and metadata discovery without a model-selected site or user', async () => {
+    const { ctx, subprocess } = await loadNative()
+    const catalog = await execute(ctx, 'frappe-catalog', 'native_bench_frappe_platform_catalog', {
+      keyword: '学生',
+      limit: 25,
+    })
+    expect(catalog.isError).toBe(false)
+    expect(subprocess.specs[0]?.stdio.stdin).toMatchObject({
+      data: JSON.stringify({ arguments: { keyword: '学生', limit: 25 } }),
+    })
+
+    const metadata = await execute(ctx, 'frappe-meta', 'native_bench_frappe_describe_doctype', {
+      doctype: 'Student',
+    })
+    expect(metadata.isError).toBe(false)
+    expect(subprocess.specs[1]?.stdio.stdin).toMatchObject({
+      data: JSON.stringify({ arguments: { doctype: 'Student' } }),
+    })
+  })
+
   it('routes structured list reads through the fixed permission-aware helper', async () => {
     const { ctx, subprocess } = await loadNative()
     const result = await execute(ctx, 'frappe-list', 'native_bench_frappe_list_documents', {
@@ -134,6 +154,51 @@ describe('Native Bench generic Frappe composition', () => {
       filters: [['name', 'in', ['STU-001', { sql: 'DROP TABLE' }]]],
     })
     expect(filterResult.isError).toBe(true)
+    expect(subprocess.specs).toHaveLength(0)
+  })
+
+  it('previews scalar updates but requires one-shot approval before apply', async () => {
+    const { ctx, subprocess } = await loadNative()
+    const changes = { student_name: '新姓名', enabled: 1 }
+    const preview = await execute(ctx, 'frappe-preview', 'native_bench_frappe_preview_document_update', {
+      doctype: 'Student',
+      name: 'STU-001',
+      changes,
+    })
+    expect(preview.isError).toBe(false)
+    expect(subprocess.specs).toHaveLength(1)
+    expect(subprocess.specs[0]?.stdio.stdin).toMatchObject({
+      data: JSON.stringify({ arguments: { doctype: 'Student', name: 'STU-001', changes } }),
+    })
+
+    const apply = await execute(ctx, 'frappe-apply', 'native_bench_frappe_apply_document_update', {
+      doctype: 'Student',
+      name: 'STU-001',
+      changes,
+      preview_id: 'a'.repeat(64),
+    })
+    expect(apply.isError).toBe(true)
+    const approval = apply.content[0]
+    expect(approval?.type).toBe('text')
+    if (approval?.type !== 'text') throw new Error('expected approval text')
+    expect(approval.text).toContain('修改 Frappe 业务记录')
+    expect(subprocess.specs).toHaveLength(1)
+  })
+
+  it('rejects child-table, structural, and sensitive update arguments before spawning', async () => {
+    const { ctx, subprocess } = await loadNative()
+    for (const changes of [
+      { owner: 'user@example.com' },
+      { api_token: 'secret' },
+      { students: [{ student: 'STU-001' }] },
+    ]) {
+      const result = await execute(ctx, `frappe-update-${subprocess.specs.length}`, 'native_bench_frappe_preview_document_update', {
+        doctype: 'Student',
+        name: 'STU-001',
+        changes,
+      })
+      expect(result.isError).toBe(true)
+    }
     expect(subprocess.specs).toHaveLength(0)
   })
 })
