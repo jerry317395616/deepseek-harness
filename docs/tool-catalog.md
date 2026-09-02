@@ -24,6 +24,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`, `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_explain_nutrition_standard`, `tongjianyun_get_weekly_nutrition_analysis`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_publish_report`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.credentials (MCP compatibility mode only)` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments run the three read-only nutrition operations directly in the configured Bench Python/Frappe context and keep MCP as an explicit compatibility mode for writes; the latter requires an authenticated endpoint and credential reference. A fixed routing section requires source evidence before current data, while publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
 | `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`, `native_bench_runtime_status`, `native_bench_search_code` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.fs` | `tool/call`, `tool/result` | - | The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench. |
 | `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_apply_document_update`, `native_bench_frappe_describe_doctype`, `native_bench_frappe_get_document`, `native_bench_frappe_list_documents`, `native_bench_frappe_platform_catalog`, `native_bench_frappe_preview_document_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess` | `tool/call`, `approved existing Frappe business-document field values`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments expose a live platform catalog, safe metadata, permission-aware reads, and previewed one-shot-approved scalar updates to existing business documents. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL, Python, or DocType schema changes. |
+| `@deepseek-ai/dsh-tool-frappe-docs` | `frappe_docs_get_page`, `frappe_docs_search`, `frappe_docs_status` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess` | `tool/call`, `tool/result` | - | The optional Bundle inserts this read-only tool row disabled. Deployments synchronize official docs.frappe.io Markdown pages outside model calls; the tools search and read the bounded local index while preserving product, version, update, and official URL metadata. Runtime behavior remains owned by active Native Bench source and site evidence. |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent pwsh tool, the Windows counterpart of the persistent bash tool; deployment composition supplies a pwsh-dialect PTY backend and may override the model-facing environment description. |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`, `ctx.fs` | `tool/call`, `fs/observed after view presence/absence, edit absence, or successful mutation`, `tool/result` | - | Standalone view/create/unique literal replace/line insert tool over the filesystem seam; it composes with any shell or terminal API. |
@@ -1123,6 +1124,91 @@ Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../package
 Source: [`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
 
 The optional Bundle inserts this tool row disabled. Native deployments expose a live platform catalog, safe metadata, permission-aware reads, and previewed one-shot-approved scalar updates to existing business documents. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL, Python, or DocType schema changes.
+
+<a id="deepseek-aidsh-tool-frappe-docs"></a>
+
+## `@deepseek-ai/dsh-tool-frappe-docs`
+
+### `frappe_docs_get_page`
+
+从本地知识库读取一个已索引的 Frappe 官方文档页面或指定章节。页面必须是 docs.frappe.io 链接或站内路径，返回内容始终有长度上限。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "page": {
+      "type": "string",
+      "description": "搜索结果返回的官方 URL，或 framework/user/en/api/rest 形式的站内路径。"
+    },
+    "heading": {
+      "type": "string",
+      "description": "可选章节标题；留空读取页面开头。"
+    },
+    "max_characters": {
+      "type": "integer",
+      "description": "最多返回字符数，1000至50000，默认20000。"
+    }
+  },
+  "required": [
+    "page"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-frappe-docs/src/index.ts`](../packages/extensions/tool-frappe-docs/src/index.ts)
+
+### `frappe_docs_search`
+
+搜索本地同步的 Frappe 官方文档知识库。返回有界相关章节、产品、版本、更新时间、摘要和 docs.frappe.io 原始链接；仅用于官方规则与开发文档，不代表当前站点实现或数据。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "搜索关键词或问题；英文 Frappe 技术词通常最准确。"
+    },
+    "product": {
+      "type": "string",
+      "description": "可选产品路径，例如 framework、erpnext、education、hr、crm。"
+    },
+    "version": {
+      "type": "string",
+      "description": "可选文档版本路径，例如 v13、v14、v15；留空搜索全部版本。"
+    },
+    "language": {
+      "type": "string",
+      "description": "可选语言代码，例如 en。"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "返回结果数量，1至20，默认8。"
+    }
+  },
+  "required": [
+    "query"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-frappe-docs/src/index.ts`](../packages/extensions/tool-frappe-docs/src/index.ts)
+
+### `frappe_docs_status`
+
+读取本地 Frappe 官方文档知识库的页面数、章节数、产品覆盖、失败数和最近同步时间，不触发网络同步。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+Source: [`packages/extensions/tool-frappe-docs/src/index.ts`](../packages/extensions/tool-frappe-docs/src/index.ts)
+
+The optional Bundle inserts this read-only tool row disabled. Deployments synchronize official docs.frappe.io Markdown pages outside model calls; the tools search and read the bounded local index while preserving product, version, update, and official URL metadata. Runtime behavior remains owned by active Native Bench source and site evidence.
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

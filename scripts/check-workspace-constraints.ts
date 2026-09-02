@@ -151,6 +151,11 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-client-ui-theme': ['lib/styles'],
   // The CPython side ships as source .py files, published as-is rather than built.
   '@deepseek-ai/dsh-code-runtime-python': ['py/**/*.py'],
+  // Native Frappe adapters and the official-docs indexer execute bounded
+  // CPython helpers whose exact source is part of the published package.
+  '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules': ['python/native_query.py'],
+  '@deepseek-ai/dsh-tool-native-bench-frappe': ['python/native_frappe_query.py'],
+  '@deepseek-ai/dsh-tool-frappe-docs': ['python/frappe_docs_kb.py'],
   // The shipped preset compositions travel inside the roster package.
   '@deepseek-ai/dsh-agent-presets': ['presets'],
   // The Web Host mounts the default-off settings owner independently of each

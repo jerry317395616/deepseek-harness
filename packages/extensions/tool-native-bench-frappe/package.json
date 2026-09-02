@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-native-bench-frappe",
   "description": "Native Bench Frappe discovery, permission-aware reads, and approved scalar updates for I-ONE Harness",
-  "version": "0.1.1-rc.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
@@ -28,8 +28,8 @@
   "files": [
     "lib/index.js",
     "lib/invariant.js",
-    "lib/types/**/*.d.ts",
-    "python/native_frappe_query.py"
+    "python/native_frappe_query.py",
+    "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "peerDependencies": {

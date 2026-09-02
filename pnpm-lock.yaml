@@ -1370,6 +1370,19 @@ importers:
         specifier: workspace:^
         version: link:../../core/session
 
+  packages/bundle/ione-frappe-docs:
+    dependencies:
+      '@deepseek-ai/dsh-tool-frappe-docs':
+        specifier: workspace:^
+        version: link:../../extensions/tool-frappe-docs
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+
   packages/bundle/ione-native-bench-frappe:
     dependencies:
       '@deepseek-ai/dsh-tool-native-bench-frappe':
@@ -5287,6 +5300,40 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
+
+  packages/extensions/tool-frappe-docs:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/cordis-plugin-include':
+        specifier: workspace:^
+        version: link:../../../vendor/include
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: workspace:^
+        version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-llm':
+        specifier: workspace:^
+        version: link:../../llm/llm
+      '@deepseek-ai/dsh-subprocess':
+        specifier: workspace:^
+        version: link:../../subprocess/subprocess
+      '@deepseek-ai/dsh-system-prompt':
+        specifier: workspace:^
+        version: link:../../core/system-prompt
+      '@deepseek-ai/dsh-tools':
+        specifier: workspace:^
+        version: link:../../core/tools
+      '@deepseek-ai/dsh-util-values':
+        specifier: workspace:^
+        version: link:../../util/values
 
   packages/extensions/tool-native-bench-frappe:
     dependencies:

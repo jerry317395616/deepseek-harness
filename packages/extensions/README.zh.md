@@ -27,6 +27,26 @@ extensions 组让运行中的 agent 修改它自己所在的运行时：模型�
 | [`tool-cordis/`](tool-cordis/README.zh.md) | `cordis_inspect`／`cordis_define`／`cordis_run`／`cordis_stop`／`cordis_undefine` 工具：读取当前进程运行时，并在一个自有分组 fiber 下管理内存中的动态包 | 注册到 `ctx.tools` |
 | [`tool-tongjianyun-nutrition-rules/`](tool-tongjianyun-nutrition-rules/README.zh.md) | Native Bench 本地 Frappe 只读工具，以及用于童健云营养规则生命周期的显式已认证 MCP 兼容模式 | 注册到 `ctx.tools` |
 | [`tool-native-bench-frappe/`](tool-native-bench-frappe/README.zh.md) | 当前 Native Bench 中允许 DocType 的受权限控制 Frappe ORM 只读访问 | 注册到 `ctx.tools` |
+| [`tool-frappe-docs/`](tool-frappe-docs/README.zh.md) | 按版本检索本地同步的 Frappe 官方文档索引 | 注册到 `ctx.tools` |
 | [`cordis-host-runner/`](cordis-host-runner/README.zh.md) | 定义注册表、host 半的 `node:vm` 沙箱，以及 request-run 往返 | 提供 `ctx.dynamicCordisRunner` |
 | [`cordis-client-runner/`](cordis-client-runner/README.zh.md) | 双半包的浏览器半：把定义求值成活的浏览器插件，并应答运行请求 | client 面；提供浏览器侧 `ctx.dynamicCordisRunner` |
 | [`ui-cordis/`](ui-cordis/README.zh.md) | 浏览器面：操作全部定义的全局面板，与只读的 define 卡片 | client 面；注册 slot |
+
+-----
+
+<a id="related-documentation"></a>
+## 相关文档
+
+[扩展子系统页面](../../docs/subsystems/extensions.zh.md)说明了本包组共用的生命周期、所有权边界与运行时界面。
+
+-----
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者工作上下文——点击展开</summary>
+
+同步 Frappe 官方文档的检索边界记录在 [Frappe 文档知识库 Agent Note](../../.agents/notes/implemented/architecture/2026-09-02-frappe-docs-knowledge-base.zh.md) 中。
+
+</details>

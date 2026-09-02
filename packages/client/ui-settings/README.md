@@ -87,7 +87,18 @@ None, as the package is a browser-side UI plugin layer that registers nothing mo
 
 None; this package neither assembles nor sends a provider request.
 
+<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
 
 - **Remote browsers need an authenticated proxy opt-in** — settings RPCs are loopback-only by default, so a non-loopback browser stays in memory mode. An IONE build behind its Frappe-authenticated reverse proxy sets public build flag `DSH_CLIENT_IONE_TRUSTED_SETTINGS=1`, which binds those scopes to Host persistence; deployments without that trust boundary must leave the flag unset.
 - **One field per write** — `set` sends a single `set` op, so a row that must move two fields together has no transaction and publishes two revisions.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+See the [settings subsystem page](../../../docs/subsystems/settings.md) for the durable settings boundary shared by these browser surfaces.
+
+</details>

@@ -51,6 +51,7 @@ import * as ToolCordis from '@deepseek-ai/dsh-tool-cordis'
 import * as ToolTongjianyunNutritionRules from '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules'
 import * as ToolNativeBenchSource from '@deepseek-ai/dsh-tool-native-bench-source'
 import * as ToolNativeBenchFrappe from '@deepseek-ai/dsh-tool-native-bench-frappe'
+import * as ToolFrappeDocs from '@deepseek-ai/dsh-tool-frappe-docs'
 import * as ToolFs from '@deepseek-ai/dsh-tool-fs'
 import * as ToolFsSearch from '@deepseek-ai/dsh-tool-fs-search'
 import * as ToolStrReplaceEditor from '@deepseek-ai/dsh-tool-str-replace-editor'
@@ -332,6 +333,22 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The optional Bundle inserts this tool row disabled. Native deployments expose a live platform catalog, safe metadata, permission-aware reads, and previewed one-shot-approved scalar updates to existing business documents. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL, Python, or DocType schema changes.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-frappe-docs',
+    dir: 'tool-frappe-docs',
+    source: 'packages/extensions/tool-frappe-docs/src/index.ts',
+    requires: ['ctx.tools', 'ctx.systemPrompt', 'ctx.subprocess'],
+    writes: ['tool/call', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(LocalSubprocessRuntime)
+      await ctx.plugin(ToolFrappeDocs, {
+        knowledgeRoot: resolve(root, '.tmp/tool-catalog/frappe-docs-kb'),
+        timeoutMs: 30_000,
+      })
+    },
+    note:
+      'The optional Bundle inserts this read-only tool row disabled. Deployments synchronize official docs.frappe.io Markdown pages outside model calls; the tools search and read the bounded local index while preserving product, version, update, and official URL metadata. Runtime behavior remains owned by active Native Bench source and site evidence.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-bash-persistent',

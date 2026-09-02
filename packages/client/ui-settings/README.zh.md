@@ -87,7 +87,18 @@ kind: "package-reference"
 
 无；该包既不组装也不发送提供方请求。
 
+<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与延期工作
 
 - **远程浏览器需要经过认证的代理显式启用**：设置 RPC 默认仅限 loopback，因此非 loopback 浏览器使用内存模式。位于 Frappe 认证反向代理后的 IONE 构建可设置公开构建标志 `DSH_CLIENT_IONE_TRUSTED_SETTINGS=1`，将这些 scope 绑定到 Host 持久化；没有该信任边界的部署必须保持此标志未设置。
 - **每次写入仅一个字段**：`set` 只发送单个 `set` op，因此需要同时改动两个字段的行没有事务可用，会发布两个 revision。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者工作上下文——点击展开</summary>
+
+这些浏览器界面共用的持久化设置边界见[设置子系统页面](../../../docs/subsystems/settings.zh.md)。
+
+</details>

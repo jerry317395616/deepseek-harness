@@ -28,7 +28,11 @@ export interface NutritionNativeSpec {
   graceMs: number
 }
 
-/** Resolve and validate the local Native Bench settings without reading secrets. */
+/**
+ * Resolve and validate the local Native Bench settings without reading secrets.
+ * @param config Deployment-owned Bench, site, identity, and output limits.
+ * @returns Validated settings for the packaged nutrition helper.
+ */
 export function resolveNutritionNativeSpec(config: {
   benchRoot?: string
   site?: string
@@ -80,6 +84,10 @@ export class NutritionNativeClient {
    * The helper imports the Tongjianyun MCP business functions after Frappe has
    * initialized the configured site, so the same ORM permissions and formula
    * code are used as the web application.
+   * @param operation Allowlisted Tongjianyun nutrition read operation.
+   * @param arguments_ Bounded, model-supplied operation arguments.
+   * @param signal Cancellation signal for the subprocess operation.
+   * @returns Canonical JSON emitted by the local helper.
    */
   async call(
     operation: string,

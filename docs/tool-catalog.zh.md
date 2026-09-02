@@ -28,6 +28,7 @@
 | `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`、`tongjianyun_create_nutrition_rule_draft`、`tongjianyun_explain_nutrition_standard`、`tongjianyun_get_weekly_nutrition_analysis`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_publish_report`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.credentials（仅 MCP 兼容模式）` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。Native 部署会在配置的 Bench Python/Frappe 上直接运行三个只读营养操作，并将 MCP 保留为规则写入的显式兼容模式；后者需要已认证接口和凭据引用。固定路由区段要求先取源码证据再读取当前数据，发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
 | `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`、`native_bench_runtime_status`、`native_bench_search_code` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.fs` | `tool/call`、`tool/result` | - | 这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 `/home/zyd/frappe/native-bench`。 |
 | `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_apply_document_update`、`native_bench_frappe_describe_doctype`、`native_bench_frappe_get_document`、`native_bench_frappe_list_documents`、`native_bench_frappe_platform_catalog`、`native_bench_frappe_preview_document_update` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess` | `tool/call`、`经批准的既有 Frappe 业务文档字段值`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。Native 部署提供实时平台目录、安全元数据、权限感知读取，以及经预览和一次性用户批准后对既有业务文档进行的有限标量字段更新。受保护基础设施与凭据 DocType 会被拒绝，敏感字段会脱敏，且不会执行任意 SQL、Python 或 DocType 结构变更。 |
+| `@deepseek-ai/dsh-tool-frappe-docs` | `frappe_docs_get_page`、`frappe_docs_search`、`frappe_docs_status` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入这个只读工具行。部署在模型调用之外同步 docs.frappe.io 官方 Markdown 页面；工具在有界本地索引中搜索和读取，同时保留产品、版本、更新时间和官方链接元数据。当前运行行为仍由 Native Bench 源码和站点证据确定。 |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-pwsh-persistent` | `pwsh` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 pwsh 工具，持久 bash 工具的 Windows 对应物；部署组合提供 pwsh 方言的 PTY 后端，并可覆盖面向模型的环境描述。 |
 | `@deepseek-ai/dsh-tool-str-replace-editor` | `str_replace_editor` | `ctx.tools`、`ctx.fs` | `tool/call`、`fs/observed after view presence/absence, edit absence, or successful mutation`、`tool/result` | - | 基于文件系统 seam 的独立查看／创建／唯一字面量替换／按行插入工具；可与任何 shell 或终端接口组合。 |
@@ -1127,6 +1128,91 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 来源：[`packages/extensions/tool-native-bench-frappe/src/index.ts`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
 
 可选 Bundle 会以禁用状态插入该工具行。Native 部署提供实时平台目录、安全元数据、权限感知读取，以及经预览和一次性用户批准后对既有业务文档进行的有限标量字段更新。受保护基础设施与凭据 DocType 会被拒绝，敏感字段会脱敏，且不会执行任意 SQL、Python 或 DocType 结构变更。
+
+<a id="deepseek-aidsh-tool-frappe-docs"></a>
+
+## `@deepseek-ai/dsh-tool-frappe-docs`
+
+### `frappe_docs_get_page`
+
+从本地知识库读取一个已索引的 Frappe 官方文档页面或指定章节。页面必须是 docs.frappe.io 链接或站内路径，返回内容始终有长度上限。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "page": {
+      "type": "string",
+      "description": "搜索结果返回的官方 URL，或 framework/user/en/api/rest 形式的站内路径。"
+    },
+    "heading": {
+      "type": "string",
+      "description": "可选章节标题；留空读取页面开头。"
+    },
+    "max_characters": {
+      "type": "integer",
+      "description": "最多返回字符数，1000至50000，默认20000。"
+    }
+  },
+  "required": [
+    "page"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-frappe-docs/src/index.ts`](../packages/extensions/tool-frappe-docs/src/index.ts)
+
+### `frappe_docs_search`
+
+搜索本地同步的 Frappe 官方文档知识库。返回有界相关章节、产品、版本、更新时间、摘要和 docs.frappe.io 原始链接；仅用于官方规则与开发文档，不代表当前站点实现或数据。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "搜索关键词或问题；英文 Frappe 技术词通常最准确。"
+    },
+    "product": {
+      "type": "string",
+      "description": "可选产品路径，例如 framework、erpnext、education、hr、crm。"
+    },
+    "version": {
+      "type": "string",
+      "description": "可选文档版本路径，例如 v13、v14、v15；留空搜索全部版本。"
+    },
+    "language": {
+      "type": "string",
+      "description": "可选语言代码，例如 en。"
+    },
+    "limit": {
+      "type": "integer",
+      "description": "返回结果数量，1至20，默认8。"
+    }
+  },
+  "required": [
+    "query"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-frappe-docs/src/index.ts`](../packages/extensions/tool-frappe-docs/src/index.ts)
+
+### `frappe_docs_status`
+
+读取本地 Frappe 官方文档知识库的页面数、章节数、产品覆盖、失败数和最近同步时间，不触发网络同步。
+
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+来源：[`packages/extensions/tool-frappe-docs/src/index.ts`](../packages/extensions/tool-frappe-docs/src/index.ts)
+
+可选 Bundle 会以禁用状态插入这个只读工具行。部署在模型调用之外同步 docs.frappe.io 官方 Markdown 页面；工具在有界本地索引中搜索和读取，同时保留产品、版本、更新时间和官方链接元数据。当前运行行为仍由 Native Bench 源码和站点证据确定。
 
 <a id="deepseek-aidsh-tool-bash-persistent"></a>
 

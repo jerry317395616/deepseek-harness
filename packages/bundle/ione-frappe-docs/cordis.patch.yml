@@ -1,0 +1,7 @@
+# Opt-in official Frappe documentation knowledge-base Bundle. The profile
+# layer supplies the deployment-owned index path before activation.
+
+- insert:
+    - id: frappe-docs
+      name: '@deepseek-ai/dsh-tool-frappe-docs'
+      disabled: true

@@ -2587,6 +2587,30 @@ export interface Config {
 
 来源：[`packages/shell/tool-bash-persistent/src/index.ts:432`](../packages/shell/tool-bash-persistent/src/index.ts)
 
+<a id="deepseek-aidsh-tool-frappe-docs"></a>
+
+## `@deepseek-ai/dsh-tool-frappe-docs`
+
+需要：`tools` · `systemPrompt` · `subprocess`
+
+```ts config-catalog
+/** Deployment-owned configuration for the local official-docs index. */
+export interface Config {
+  /** Absolute directory containing frappe-docs.sqlite3. */
+  knowledgeRoot?: string
+  /** Absolute Python 3 executable used by the packaged helper. */
+  pythonExecutable?: string
+  /** Maximum captured helper output in bytes. */
+  maxOutputBytes?: number
+  /** Maximum serialized model arguments sent to the helper. */
+  maxInputBytes?: number
+  /** Cooperative timeout budget for one local retrieval. */
+  timeoutMs: number
+}
+```
+
+来源：[`packages/extensions/tool-frappe-docs/src/index.ts:22`](../packages/extensions/tool-frappe-docs/src/index.ts)
+
 <a id="deepseek-aidsh-tool-fs"></a>
 
 ## `@deepseek-ai/dsh-tool-fs`
@@ -2735,12 +2759,12 @@ export interface Config {
   maxOutputBytes?: number
   /** Maximum serialized model arguments sent to the helper. */
   maxInputBytes?: number
-  /** Cooperative timeout budget for one Frappe read. */
+  /** Cooperative timeout budget for one Frappe operation. */
   timeoutMs: number
 }
 ```
 
-来源：[`packages/extensions/tool-native-bench-frappe/src/index.ts:21`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
+来源：[`packages/extensions/tool-native-bench-frappe/src/index.ts:23`](../packages/extensions/tool-native-bench-frappe/src/index.ts)
 
 <a id="deepseek-aidsh-tool-native-bench-source"></a>
 
@@ -2768,7 +2792,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/extensions/tool-native-bench-source/src/index.ts:42`](../packages/extensions/tool-native-bench-source/src/index.ts)
+来源：[`packages/extensions/tool-native-bench-source/src/index.ts:43`](../packages/extensions/tool-native-bench-source/src/index.ts)
 
 <a id="deepseek-aidsh-tool-pwsh"></a>
 
@@ -3333,6 +3357,22 @@ export interface Config {
 
 来源：[`packages/web/web-search-perplexity/src/index.ts:30`](../packages/web/web-search-perplexity/src/index.ts)
 
+<a id="deepseek-aidsh-web-search-searxng"></a>
+
+## `@deepseek-ai/dsh-web-search-searxng`
+
+需要：`web`
+
+```ts config-catalog
+/** Deployment settings for the SearXNG origin. */
+export interface Config {
+  /** SearXNG origin; `/search?q=…&format=json` is appended by the provider. */
+  baseURL?: string
+}
+```
+
+来源：[`packages/web/web-search-searxng/src/index.ts:29`](../packages/web/web-search-searxng/src/index.ts)
+
 <a id="deepseek-aidsh-webhook-github"></a>
 
 ## `@deepseek-ai/dsh-webhook-github`
@@ -3354,22 +3394,6 @@ export interface Config {
 ```
 
 来源：[`packages/webhook/webhook-github/src/index.ts:17`](../packages/webhook/webhook-github/src/index.ts)
-
-<a id="deepseek-aidsh-web-search-searxng"></a>
-
-## `@deepseek-ai/dsh-web-search-searxng`
-
-需要：`web`
-
-```ts config-catalog
-/** Deployment settings for the SearXNG origin. */
-export interface Config {
-  /** SearXNG origin; `/search?q=…&format=json` is appended by the provider. */
-  baseURL?: string
-}
-```
-
-来源：[`packages/web/web-search-searxng/src/index.ts:29`](../packages/web/web-search-searxng/src/index.ts)
 
 <a id="deepseek-aidsh-workflow-worker-thread"></a>
 
@@ -3527,6 +3551,7 @@ export interface Config {
 - `@deepseek-ai/dsh-experimental-webworker-runtime`（[`packages/experimental/webworker-runtime/src/index.ts`](../packages/experimental/webworker-runtime/src/index.ts)）
 - `@deepseek-ai/dsh-home-paths`（[`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts)）
 - `@deepseek-ai/dsh-hook-protocol`（[`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts)）
+- `@deepseek-ai/dsh-ione-frappe-docs`（[`packages/bundle/ione-frappe-docs/src/index.ts`](../packages/bundle/ione-frappe-docs/src/index.ts)）
 - `@deepseek-ai/dsh-ione-native-bench-frappe`（[`packages/bundle/ione-native-bench-frappe/src/index.ts`](../packages/bundle/ione-native-bench-frappe/src/index.ts)）
 - `@deepseek-ai/dsh-ione-native-bench-source`（[`packages/bundle/ione-native-bench-source/src/index.ts`](../packages/bundle/ione-native-bench-source/src/index.ts)）
 - `@deepseek-ai/dsh-ione-tongjianyun-nutrition-rules`（[`packages/bundle/ione-tongjianyun-nutrition-rules/src/index.ts`](../packages/bundle/ione-tongjianyun-nutrition-rules/src/index.ts)）

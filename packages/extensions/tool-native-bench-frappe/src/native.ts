@@ -32,7 +32,11 @@ export interface NativeFrappeSpec {
   graceMs: number
 }
 
-/** Resolve and validate local Native Bench settings without reading secrets. */
+/**
+ * Resolve and validate local Native Bench settings without reading secrets.
+ * @param config Deployment-owned Bench, site, identity, and subprocess limits.
+ * @returns Validated settings for the packaged native Frappe helper.
+ */
 export function resolveNativeFrappeSpec(config: {
   benchRoot?: string
   site?: string
@@ -85,7 +89,13 @@ export class NativeFrappeClient {
     private readonly spec: NativeFrappeSpec,
   ) {}
 
-  /** Execute one bounded operation without a network hop, raw SQL, or Python input. */
+  /**
+   * Execute one bounded operation without a network hop, raw SQL, or Python input.
+   * @param operation Allowlisted native Frappe operation.
+   * @param arguments_ Bounded, model-supplied operation arguments.
+   * @param signal Cancellation signal for the subprocess operation.
+   * @returns Canonical JSON emitted by the local helper.
+   */
   async call(
     operation: string,
     arguments_: Record<string, JsonValue>,

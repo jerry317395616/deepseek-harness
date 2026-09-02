@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-ione-native-bench-source",
   "description": "Opt-in Bundle for Native Bench source evidence tools",
-  "version": "0.1.1-rc.2",
+  "version": "0.1.2-alpha.3",
   "publishConfig": {
     "access": "public"
   },
