@@ -179,4 +179,13 @@ describe('Native Bench source tools', () => {
     expect(text(result)).toContain('建议扩展文件：apps/tongjianyun/tongjianyun/custom/student.json')
     expect(text(result)).not.toContain('建议扩展文件：apps/education/')
   })
+
+  it('requires explicit approval before running a fixed Tongjianyun deploy action', async () => {
+    const result = await call('native_bench_deploy_tongjianyun_extension', {
+      action: 'build-assets',
+    })
+
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('需要用户逐次批准')
+  })
 })

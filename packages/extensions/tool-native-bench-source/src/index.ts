@@ -14,7 +14,7 @@ import { rgPath } from '@vscode/ripgrep'
 import type { FsTarget } from '@deepseek-ai/dsh-fs'
 import type { SubprocessHandle, SubprocessOutcome, SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { PreToolDecision, ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -46,6 +46,12 @@ export interface Config {
   benchRoot: string
   /** App that owns every generated or edited business extension. */
   extensionApp?: string
+  /** Frappe site used by the fixed, approval-gated deployment actions. */
+  site?: string
+  /** Deployment-owned Bench executable; never supplied by the model. */
+  benchExecutable?: string
+  /** Timeout for a fixed build, migrate or clear-cache action. */
+  deployTimeoutMs?: number
   /** Maximum matches retained inline by one source search. */
   maxMatches?: number
   /** Maximum bytes retained for one matched-line preview. */
@@ -64,6 +70,9 @@ export interface Config {
 export const Config: z<Config> = z.object({
   benchRoot: z.string().required(),
   extensionApp: z.string().default('tongjianyun'),
+  site: z.string().default(''),
+  benchExecutable: z.string().default('bench'),
+  deployTimeoutMs: z.number().step(1).min(1_000).max(1_800_000).default(600_000),
   maxMatches: z.number().step(1).min(1).max(1000).default(MAX_MATCHES),
   maxLineBytes: z.number().step(1).min(64).max(16_000).default(4_000),
   maxRawOutputBytes: z.number().step(1).min(1_024).max(MAX_RAW_OUTPUT_BYTES).default(MAX_RAW_OUTPUT_BYTES),
@@ -133,6 +142,18 @@ interface ExtensionPlanResult {
   rules: string[]
 }
 
+type TongjianyunDeployAction = 'build-assets' | 'migrate-site' | 'clear-cache'
+
+interface DeployResult {
+  action: TongjianyunDeployAction
+  site: string
+  command: string
+  exit_code: number
+  stdout: string
+  stderr: string
+  output_truncated: boolean
+}
+
 const EXTENSION_CHANGE_KINDS = new Set<ExtensionChangeKind>([
   'form-ui',
   'list-ui',
@@ -143,6 +164,12 @@ const EXTENSION_CHANGE_KINDS = new Set<ExtensionChangeKind>([
   'business-logic',
   'report',
   'workspace',
+])
+
+const TONGJIANYUN_DEPLOY_ACTIONS = new Set<TongjianyunDeployAction>([
+  'build-assets',
+  'migrate-site',
+  'clear-cache',
 ])
 
 const ROUTE_SCAN_IGNORED_DIRECTORIES = new Set([
@@ -533,6 +560,79 @@ async function planTongjianyunExtension(
   }
 }
 
+/** Validate a deployment action before selecting its fixed argv. */
+function tongjianyunDeployAction(value: string): TongjianyunDeployAction {
+  if (!TONGJIANYUN_DEPLOY_ACTIONS.has(value as TongjianyunDeployAction)) {
+    throw new Error(`action must be one of: ${[...TONGJIANYUN_DEPLOY_ACTIONS].join(', ')}`)
+  }
+  return value as TongjianyunDeployAction
+}
+
+/** Run one approval-gated, deployment-owned Bench command without arbitrary arguments. */
+async function deployTongjianyunExtension(
+  ctx: Context,
+  roots: BenchRoots,
+  config: ResolvedConfig,
+  requestedAction: string,
+  signal: AbortSignal,
+): Promise<DeployResult> {
+  const action = tongjianyunDeployAction(requestedAction)
+  if (config.site.trim() === '') throw new Error('The deployment did not configure a Frappe site')
+  const argv = action === 'build-assets'
+    ? [config.benchExecutable, 'build', '--app', config.extensionApp]
+    : action === 'migrate-site'
+      ? [config.benchExecutable, '--site', config.site, 'migrate']
+      : [config.benchExecutable, '--site', config.site, 'clear-cache']
+  if (signal.aborted) throw new Error('Tongjianyun deployment action was cancelled')
+
+  let handle: SubprocessHandle
+  try {
+    handle = ctx.subprocess.spawn({
+      argv,
+      cwd: roots.bench,
+      stdio: {
+        stdin: 'ignore',
+        stdout: { maxBytes: config.maxRawOutputBytes },
+        stderr: { maxBytes: config.maxRawOutputBytes },
+      },
+      graceMs: config.graceMs,
+      signal,
+    } satisfies SubprocessSpawnSpec)
+  } catch (error) {
+    throw new Error('Tongjianyun deployment process could not start', { cause: error })
+  }
+
+  let outcome: SubprocessOutcome
+  try {
+    outcome = await handle.done
+  } catch (error) {
+    throw new Error('Tongjianyun deployment process failed', { cause: error })
+  }
+  const stdout = handle.collected.stdout?.readFrom(0)
+  const stderr = handle.collected.stderr?.readFrom(0)
+  if (stdout === undefined || stderr === undefined) throw new Error('Tongjianyun deployment output streams are unavailable')
+  if (signal.aborted) throw new Error('Tongjianyun deployment action was cancelled')
+  if (outcome.signal !== null || outcome.exitCode === null) throw new Error('Tongjianyun deployment action was terminated')
+  if (outcome.exitCode !== 0) {
+    const detail = stderr.text.trim() || stdout.text.trim()
+    throw new Error(`Tongjianyun deployment action failed with exit code ${outcome.exitCode}${detail ? `: ${detail.slice(-2_000)}` : ''}`)
+  }
+
+  return {
+    action,
+    site: config.site,
+    command: action === 'build-assets'
+      ? `bench build --app ${config.extensionApp}`
+      : action === 'migrate-site'
+        ? `bench --site ${config.site} migrate`
+        : `bench --site ${config.site} clear-cache`,
+    exit_code: outcome.exitCode,
+    stdout: stdout.text,
+    stderr: stderr.text,
+    output_truncated: stdout.lossy || stderr.lossy,
+  }
+}
+
 /** Validate a single positive ripgrep glob. */
 function validateInclude(include: string | undefined): void {
   if (include === undefined) return
@@ -753,6 +853,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       '- 修改任意 Frappe 业务界面或逻辑前，还必须调用 native_bench_plan_tongjianyun_extension；可以读取所有应用，但所有业务源码变更只能写入配置的 Tongjianyun 扩展应用。',
       '- Frappe、Education、ERPNext、IONE Core 等上游应用是只读事实来源，不得直接修改。禁止新增 DocType，禁止直接修改上游 DocType JSON。',
       '- 只有用户明确要求字段结构变更且已预览目标、字段、权限和迁移影响时，才可在 Tongjianyun 中维护 Custom Field/Property Setter fixture；普通 UI 请求不得顺带改结构。',
+      '- 需要构建资源、迁移站点或清缓存时，只能使用 native_bench_deploy_tongjianyun_extension 的固定动作并等待用户批准；不得用任意命令绕过写入边界。',
       '- UI 修改后必须在用户给出的原始路由验证实际显示；只验证 Python 返回值、清除缓存或重启进程不能证明界面修改完成。',
       '- 涉及任意 Native Bench 应用业务逻辑时，先用 native_bench_search_code 搜索，再用 native_bench_read_file 读取上下文。',
       '- 涉及运行配置时使用 native_bench_runtime_status；该工具不会返回站点密钥或数据库密码。',
@@ -760,6 +861,14 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       '- 源码与数据库不一致时明确指出；工具失败时说明证据不可用，不得用通用知识补造业务结果。',
     ].join('\n'),
   }))
+
+  ctx.on('tools/pre-execute', async (execution, next): Promise<PreToolDecision> => {
+    if (execution.name !== 'native_bench_deploy_tongjianyun_extension') return next()
+    return {
+      kind: 'ask',
+      reason: '需要用户逐次批准：将执行固定的 Tongjianyun Frappe 发布动作；可能更新站点资源、缓存或运行迁移，且不接受任意命令参数。',
+    }
+  })
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'native_bench_resolve_ui_route',
@@ -825,6 +934,40 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       resolved,
       args.url_or_route,
       args.change_kind,
+      exec.signal,
+    ) as Promise<unknown> as Promise<JsonValue>,
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'native_bench_deploy_tongjianyun_extension',
+    description: '在用户逐次批准后执行固定的 Tongjianyun 发布动作。仅支持 build-assets、migrate-site、clear-cache；站点、Bench 路径、应用和可执行文件均由部署配置固定，不接受任意命令。',
+    parameters: {
+      action: { type: 'string', required: true, description: '固定动作：build-assets、migrate-site 或 clear-cache。' },
+    },
+    output: {
+      schema: { type: 'json' as const },
+      render: (_args: unknown, value: JsonValue) => {
+        const result = value as unknown as DeployResult
+        return [{
+          type: 'text' as const,
+          text: [
+            `发布动作：${result.action}`,
+            `站点：${result.site}`,
+            `固定命令：${result.command}`,
+            `退出码：${result.exit_code}`,
+            result.output_truncated ? '输出：超过限制，已截断。' : '输出：完整。',
+            result.stdout.trim() ? `stdout:\n${result.stdout.trim()}` : '',
+            result.stderr.trim() ? `stderr:\n${result.stderr.trim()}` : '',
+          ].filter(Boolean).join('\n'),
+        }]
+      },
+    },
+    timeoutMs: resolved.deployTimeoutMs,
+    execute: (args, exec) => deployTongjianyunExtension(
+      ctx,
+      roots,
+      resolved,
+      args.action,
       exec.signal,
     ) as Promise<unknown> as Promise<JsonValue>,
   })))
