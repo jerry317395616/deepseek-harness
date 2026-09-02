@@ -18,10 +18,28 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'dsh-native-bench-source-'))
   await Promise.all([
     mkdir(join(root, 'apps', 'tongjianyun', 'tongjianyun'), { recursive: true }),
+    mkdir(join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'page', 'weekly_recipe_nutrition_sheet'), { recursive: true }),
+    mkdir(join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'report', 'weekly_recipe_nutrition_analysis'), { recursive: true }),
     mkdir(join(root, 'sites'), { recursive: true }),
     mkdir(join(root, 'config'), { recursive: true }),
   ])
   await writeFile(join(root, 'apps', 'tongjianyun', 'tongjianyun', 'nutrition.py'), 'ENERGY_STANDARD = 600\n')
+  await writeFile(
+    join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'page', 'weekly_recipe_nutrition_sheet', 'weekly_recipe_nutrition_sheet.js'),
+    'frappe.call({ method: "tongjianyun.nutrition_sheet.get_nutrition_sheet" })\n',
+  )
+  await writeFile(
+    join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'page', 'weekly_recipe_nutrition_sheet', 'weekly_recipe_nutrition_sheet.json'),
+    JSON.stringify({ page_name: 'weekly-recipe-nutrition-sheet', title: '周食谱营养分析' }),
+  )
+  await writeFile(
+    join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'report', 'weekly_recipe_nutrition_analysis', 'weekly_recipe_nutrition_analysis.py'),
+    'def execute(filters=None):\n    return [], []\n',
+  )
+  await writeFile(
+    join(root, 'apps', 'tongjianyun', 'tongjianyun', 'nutrition_sheet.py'),
+    'def get_nutrition_sheet():\n    return {}\n',
+  )
   await writeFile(join(root, 'secret.txt'), 'not allowlisted\n')
   await mkdir(join(root, 'sites', 'child.myyr.top'), { recursive: true })
   await writeFile(join(root, 'sites', 'child.myyr.top', 'site_config.json'), JSON.stringify({
@@ -95,5 +113,38 @@ describe('Native Bench source tools', () => {
     const runtime = await call('native_bench_runtime_status', {})
     expect(runtime.isError).toBe(false)
     expect(text(runtime)).not.toContain('must-not-leak')
+  })
+
+  it('resolves an exact Page route instead of a similarly named Query Report', async () => {
+    const result = await call('native_bench_resolve_ui_route', {
+      url_or_route: 'https://child.myyr.top/desk/weekly-recipe-nutrition-sheet',
+    })
+    expect(result.isError).toBe(false)
+    expect(result.value).toMatchObject({
+      route_kind: 'page',
+      route_slug: 'weekly_recipe_nutrition_sheet',
+      matched_app: 'tongjianyun',
+      target_lock: { ready: true },
+      backend_methods: [{
+        method: 'tongjianyun.nutrition_sheet.get_nutrition_sheet',
+        path: 'apps/tongjianyun/tongjianyun/nutrition_sheet.py',
+      }],
+    })
+    expect(text(result)).toContain('page/weekly_recipe_nutrition_sheet/weekly_recipe_nutrition_sheet.js')
+    expect(text(result)).not.toContain('report/weekly_recipe_nutrition_analysis')
+  })
+
+  it('resolves an explicit Query Report route independently', async () => {
+    const result = await call('native_bench_resolve_ui_route', {
+      url_or_route: '/desk/query-report/Weekly%20Recipe%20Nutrition%20Analysis',
+    })
+    expect(result.isError).toBe(false)
+    expect(result.value).toMatchObject({
+      route_kind: 'query-report',
+      route_slug: 'weekly_recipe_nutrition_analysis',
+      matched_app: 'tongjianyun',
+      target_lock: { ready: true },
+    })
+    expect(text(result)).toContain('report/weekly_recipe_nutrition_analysis/weekly_recipe_nutrition_analysis.py')
   })
 })

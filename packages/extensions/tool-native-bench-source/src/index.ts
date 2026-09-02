@@ -5,7 +5,8 @@
  * @module @deepseek-ai/dsh-tool-native-bench-source
  */
 
-import { realpath, stat } from 'node:fs/promises'
+import { readdir, readFile, realpath, stat } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
 import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
@@ -90,6 +91,37 @@ interface SearchResult {
   totalMatches: number
   truncated: boolean
 }
+
+type FrappeUiKind = 'page' | 'query-report' | 'workspace' | 'doctype' | 'unresolved'
+
+interface BackendMethodTarget {
+  method: string
+  path: string | null
+}
+
+interface RouteTargetResult {
+  input: string
+  route_path: string
+  route_kind: FrappeUiKind
+  route_slug: string
+  matched_app: string | null
+  target_files: string[]
+  frontend_files: string[]
+  backend_methods: BackendMethodTarget[]
+  target_lock: {
+    ready: boolean
+    reason: string
+  }
+  required_next_steps: string[]
+}
+
+const ROUTE_SCAN_IGNORED_DIRECTORIES = new Set([
+  '.git',
+  '__pycache__',
+  'node_modules',
+  'dist',
+  'build',
+])
 
 /** Site credentials and private backups are never model-readable. */
 function isSensitivePath(display: string): boolean {
@@ -192,6 +224,198 @@ async function resolveAppRoot(app: string | undefined, roots: BenchRoots): Promi
   const info = await stat(resolved.canonical)
   if (!info.isDirectory() || !isWithin(resolved.canonical, roots.apps)) throw new Error(`Native Bench app does not exist: ${app}`)
   return { path: resolved.canonical, display: resolved.display }
+}
+
+/** Convert a Desk/App URL or route into decoded Frappe route segments. */
+function parseFrappeRoute(input: string): { path: string; segments: string[] } {
+  const value = input.trim()
+  if (value === '') throw new Error('url_or_route must be a non-empty URL or Frappe route')
+  let pathname = value
+  try {
+    pathname = new URL(value).pathname
+  } catch {
+    pathname = value.split(/[?#]/, 1)[0] ?? value
+  }
+  const decoded = pathname
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment)
+      } catch {
+        return segment
+      }
+    })
+  const deskIndex = decoded.findIndex(segment => segment === 'desk' || segment === 'app')
+  const segments = deskIndex >= 0 ? decoded.slice(deskIndex + 1) : decoded
+  return { path: `/${decoded.join('/')}`, segments }
+}
+
+/** Match Frappe's filesystem convention for route and document names. */
+function frappeSlug(value: string): string {
+  return value
+    .normalize('NFKC')
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, '_')
+    .replace(/[^a-z0-9_]/g, '')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '')
+}
+
+/** Locate exact section/slug artifacts without searching inside every DocType. */
+async function findSectionArtifacts(
+  roots: BenchRoots,
+  section: Exclude<FrappeUiKind, 'unresolved'>,
+  slug: string,
+  signal: AbortSignal,
+): Promise<string[]> {
+  const sectionDirectory = section === 'query-report' ? 'report' : section
+  const appEntries = await readdir(roots.apps, { withFileTypes: true })
+  const stack = appEntries
+    .filter(entry => entry.isDirectory() && !entry.isSymbolicLink())
+    .map(entry => join(roots.apps, entry.name))
+  const matches: string[] = []
+  while (stack.length > 0) {
+    if (signal.aborted) throw new Error('Native Bench route resolution was cancelled')
+    const current = stack.pop()
+    if (current === undefined) break
+    let entries: Dirent[]
+    try {
+      entries = await readdir(current, { withFileTypes: true })
+    } catch {
+      continue
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory() || entry.isSymbolicLink() || ROUTE_SCAN_IGNORED_DIRECTORIES.has(entry.name)) continue
+      if (entry.name === sectionDirectory) {
+        const artifactDirectory = join(current, entry.name, slug)
+        let artifacts
+        try {
+          artifacts = await readdir(artifactDirectory, { withFileTypes: true })
+        } catch {
+          continue
+        }
+        for (const artifact of artifacts) {
+          if (!artifact.isFile()) continue
+          const extension = artifact.name.slice(artifact.name.lastIndexOf('.'))
+          if (!['.js', '.json', '.py', '.ts', '.tsx', '.vue', '.html'].includes(extension)) continue
+          matches.push(displayPath(join(artifactDirectory, artifact.name), roots))
+        }
+        continue
+      }
+      stack.push(join(current, entry.name))
+    }
+  }
+  return matches.sort()
+}
+
+/** Extract whitelisted Python method names invoked by a Frappe page. */
+async function extractBackendMethods(
+  files: string[],
+  roots: BenchRoots,
+  maxFileBytes: number,
+): Promise<BackendMethodTarget[]> {
+  const methods = new Set<string>()
+  const methodPatterns = [
+    /\bmethod\s*:\s*["']([A-Za-z0-9_.]+)["']/g,
+    /\bfrappe\.call\(\s*["']([A-Za-z0-9_.]+)["']/g,
+  ]
+  for (const display of files.filter(path => /\.(?:js|ts|tsx|vue)$/.test(path))) {
+    const path = join(roots.bench, ...display.split('/'))
+    const info = await stat(path)
+    if (info.size > maxFileBytes) continue
+    const source = await readFile(path, 'utf8')
+    for (const pattern of methodPatterns) {
+      pattern.lastIndex = 0
+      for (let match = pattern.exec(source); match !== null; match = pattern.exec(source)) {
+        if (match[1] !== undefined) methods.add(match[1])
+      }
+    }
+  }
+  return Promise.all([...methods].sort().map(async method => ({
+    method,
+    path: await resolvePythonMethodPath(method, roots),
+  })))
+}
+
+/** Resolve a dotted Frappe method to its Python module when it is app-owned. */
+async function resolvePythonMethodPath(method: string, roots: BenchRoots): Promise<string | null> {
+  const parts = method.split('.').filter(Boolean)
+  if (parts.length < 3) return null
+  const app = parts[0]
+  if (app === undefined || !/^[A-Za-z0-9_-]+$/.test(app)) return null
+  const moduleParts = parts.slice(1, -1)
+  const candidate = join(roots.apps, app, app, ...moduleParts) + '.py'
+  try {
+    const canonical = await realpath(candidate)
+    const info = await stat(canonical)
+    return info.isFile() && isWithin(canonical, roots.apps) ? displayPath(canonical, roots) : null
+  } catch {
+    return null
+  }
+}
+
+/** Resolve the exact Frappe UI entrypoint before any source edit is attempted. */
+async function resolveUiRoute(
+  roots: BenchRoots,
+  config: ResolvedConfig,
+  input: string,
+  signal: AbortSignal,
+): Promise<RouteTargetResult> {
+  const route = parseFrappeRoute(input)
+  if (route.segments.length === 0) throw new Error('The URL does not contain a Frappe Desk/App route')
+
+  const explicitReport = route.segments[0] === 'query-report'
+  const routeName = explicitReport ? route.segments.slice(1).join(' ') : route.segments[0] ?? ''
+  const slug = frappeSlug(routeName)
+  if (slug === '') throw new Error('The Frappe route cannot be converted to a filesystem slug')
+
+  const kinds: Array<Exclude<FrappeUiKind, 'unresolved'>> = explicitReport
+    ? ['query-report']
+    : ['page', 'workspace', 'doctype']
+  let kind: FrappeUiKind = 'unresolved'
+  let targetFiles: string[] = []
+  for (const candidateKind of kinds) {
+    const files = await findSectionArtifacts(roots, candidateKind, slug, signal)
+    if (files.length === 0) continue
+    kind = candidateKind
+    targetFiles = files
+    break
+  }
+
+  const appNames = new Set(targetFiles.map(path => path.split('/')[1]).filter((value): value is string => Boolean(value)))
+  const matchedApp = appNames.size === 1 ? [...appNames][0] ?? null : null
+  const frontendFiles = targetFiles.filter(path => /\.(?:js|ts|tsx|vue|html)$/.test(path))
+  const backendMethods = await extractBackendMethods(frontendFiles, roots, config.maxFileBytes)
+  const ready = kind !== 'unresolved' && appNames.size === 1 && targetFiles.length > 0
+  const reason = ready
+    ? `已按路由锁定 ${matchedApp} 应用中的 ${kind} 入口；修改前仍需读取前端渲染函数和后端方法。`
+    : kind === 'unresolved'
+      ? '未找到与该路由完全匹配的 Page、Report、Workspace 或 DocType 文件，禁止凭标题猜测修改目标。'
+      : '同一路由在多个应用中有候选文件，必须先消除歧义。'
+
+  return {
+    input,
+    route_path: route.path,
+    route_kind: kind,
+    route_slug: slug,
+    matched_app: matchedApp,
+    target_files: targetFiles,
+    frontend_files: frontendFiles,
+    backend_methods: backendMethods,
+    target_lock: { ready, reason },
+    required_next_steps: ready
+      ? [
+        '读取 target_files 中控制当前界面渲染的代码。',
+        '读取 backend_methods 对应的后端文件并确认数据来源。',
+        '只修改已证明处于该调用链中的文件；相似名称的报表不是修改依据。',
+        '修改后必须在用户给出的原始路由验证实际界面。',
+      ]
+      : [
+        '继续检查 Frappe 路由注册、Page/Report 元数据或运行站点，不得直接编辑相似名称文件。',
+      ],
+  }
 }
 
 /** Validate a single positive ripgrep glob. */
@@ -408,12 +632,47 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     text: [
       'Native Bench 源码取证规则：',
       '- 当前运行源码的唯一第一优先级是 /home/zyd/frappe/native-bench/apps；不要把 /workspace 或 frappe-direct 当作当前源码。',
+      '- 用户提供 /desk、/app URL 或明确路由时，任何搜索、编辑、清缓存或重启之前都必须先调用 native_bench_resolve_ui_route。',
+      '- 禁止仅凭中文页面标题、相似文件名或同名 Report 推断修改目标；必须先建立“原始 URL → UI 类型 → 前端入口 → frappe.call 后端方法”调用链。',
+      '- native_bench_resolve_ui_route 的 target_lock.ready 不为 true 时不得编辑；应继续只读取证，消除未解析或多应用歧义。',
+      '- UI 修改后必须在用户给出的原始路由验证实际显示；只验证 Python 返回值、清除缓存或重启进程不能证明界面修改完成。',
       '- 涉及任意 Native Bench 应用业务逻辑时，先用 native_bench_search_code 搜索，再用 native_bench_read_file 读取上下文。',
       '- 涉及运行配置时使用 native_bench_runtime_status；该工具不会返回站点密钥或数据库密码。',
       '- 涉及数据库时，若通用 Frappe 读取包已启用，使用 native_bench_frappe_list_documents 或 native_bench_frappe_get_document；否则明确说明数据库读取工具未启用。童健云营养问题仍优先使用营养专用工具。',
       '- 源码与数据库不一致时明确指出；工具失败时说明证据不可用，不得用通用知识补造业务结果。',
     ].join('\n'),
   }))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'native_bench_resolve_ui_route',
+    description: '把 Frappe /desk 或 /app URL/路由解析为当前 Native Bench 中准确的 Page、Query Report、Workspace 或 DocType 文件，并提取前端调用的后端方法。任何 UI 修改前必须先调用。只读。',
+    parameters: {
+      url_or_route: { type: 'string', required: true, description: '用户正在查看的完整 URL 或 Frappe 路由，例如 https://child.example/desk/weekly-recipe-nutrition-sheet。' },
+    },
+    output: {
+      schema: { type: 'json' as const },
+      render: (_args: unknown, value: JsonValue) => {
+        const result = value as unknown as RouteTargetResult
+        const backend = result.backend_methods.length === 0
+          ? ['后端方法：未从前端入口提取到；需要继续读取证。']
+          : result.backend_methods.map(item => `后端方法：${item.method}${item.path ? ` → ${item.path}` : '（源码路径未自动解析）'}`)
+        return [{
+          type: 'text' as const,
+          text: [
+            `路由：${result.route_path}`,
+            `类型：${result.route_kind}`,
+            `应用：${result.matched_app ?? '未唯一确定'}`,
+            `目标锁定：${result.target_lock.ready ? '已锁定' : '未锁定'}；${result.target_lock.reason}`,
+            ...result.target_files.map(path => `目标文件：${path}`),
+            ...backend,
+            ...result.required_next_steps.map(step => `下一步：${step}`),
+          ].join('\n'),
+        }]
+      },
+    },
+    timeoutMs: resolved.timeoutMs,
+    execute: (args, exec) => resolveUiRoute(roots, resolved, args.url_or_route, exec.signal) as Promise<unknown> as Promise<JsonValue>,
+  })))
 
   const searchOutput = {
     schema: { type: 'json' as const },
