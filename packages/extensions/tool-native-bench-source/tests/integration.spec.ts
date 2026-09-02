@@ -20,6 +20,7 @@ beforeEach(async () => {
     mkdir(join(root, 'apps', 'tongjianyun', 'tongjianyun'), { recursive: true }),
     mkdir(join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'page', 'weekly_recipe_nutrition_sheet'), { recursive: true }),
     mkdir(join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'report', 'weekly_recipe_nutrition_analysis'), { recursive: true }),
+    mkdir(join(root, 'apps', 'education', 'education', 'education', 'doctype', 'student'), { recursive: true }),
     mkdir(join(root, 'sites'), { recursive: true }),
     mkdir(join(root, 'config'), { recursive: true }),
   ])
@@ -27,6 +28,14 @@ beforeEach(async () => {
   await writeFile(
     join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'page', 'weekly_recipe_nutrition_sheet', 'weekly_recipe_nutrition_sheet.js'),
     'frappe.call({ method: "tongjianyun.nutrition_sheet.get_nutrition_sheet" })\n',
+  )
+  await writeFile(
+    join(root, 'apps', 'education', 'education', 'education', 'doctype', 'student', 'student.json'),
+    JSON.stringify({ doctype: 'DocType', name: 'Student', module: 'Education' }),
+  )
+  await writeFile(
+    join(root, 'apps', 'education', 'education', 'education', 'doctype', 'student', 'student.js'),
+    'frappe.ui.form.on("Student", {})\n',
   )
   await writeFile(
     join(root, 'apps', 'tongjianyun', 'tongjianyun', 'tongjianyun', 'page', 'weekly_recipe_nutrition_sheet', 'weekly_recipe_nutrition_sheet.json'),
@@ -146,5 +155,28 @@ describe('Native Bench source tools', () => {
       target_lock: { ready: true },
     })
     expect(text(result)).toContain('report/weekly_recipe_nutrition_analysis/weekly_recipe_nutrition_analysis.py')
+  })
+
+  it('plans an upstream DocType field extension only inside Tongjianyun', async () => {
+    const result = await call('native_bench_plan_tongjianyun_extension', {
+      url_or_route: 'https://child.myyr.top/app/student',
+      change_kind: 'add-field',
+    })
+    expect(result.isError).toBe(false)
+    expect(result.value).toMatchObject({
+      extension_app: 'tongjianyun',
+      allowed_write_root: 'apps/tongjianyun',
+      structural_change: true,
+      requires_explicit_confirmation: true,
+      ready: true,
+      source: {
+        route_kind: 'doctype',
+        matched_app: 'education',
+        target_lock: { ready: true },
+      },
+    })
+    expect(text(result)).toContain('只读上游文件：apps/education/')
+    expect(text(result)).toContain('建议扩展文件：apps/tongjianyun/tongjianyun/custom/student.json')
+    expect(text(result)).not.toContain('建议扩展文件：apps/education/')
   })
 })

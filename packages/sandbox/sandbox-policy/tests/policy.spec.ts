@@ -15,7 +15,7 @@ import SandboxPolicyService, { SANDBOX_MODES, setSandboxMode } from '@deepseek-a
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
 import SystemPrompt, { renderContextSnapshot, renderPrompt } from '@deepseek-ai/dsh-system-prompt'
 
-async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}) {
+async function mounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string; lockDeploymentPolicy?: boolean } = {}) {
   const ctx = new Context()
   await ctx.plugin(SessionProjectionRegistry)
   await ctx.plugin(SandboxPolicyService, config)
@@ -120,6 +120,22 @@ describe('SandboxPolicyService', () => {
     })
   })
 
+  it('pins a hosted deployment to its configured mode and writable root', async () => {
+    const ctx = await mounted({
+      mode: 'workspace-write',
+      workspaceRoot: '/native-bench/apps/tongjianyun',
+      lockDeploymentPolicy: true,
+    })
+    const active = session('sess-deployment-lock', '/home/zyd/frappe')
+    setSandboxMode(active, 'danger-full-access')
+
+    expect(ctx.sandboxPolicy.resolve({ session: active, mode: 'danger-full-access' })).toEqual({
+      mode: 'workspace-write',
+      workspaceRoot: resolve('/native-bench/apps/tongjianyun'),
+      sessionId: 'sess-deployment-lock',
+    })
+  })
+
   it('uses the configured root when a session has no cwd', async () => {
     const ctx = await mounted({ workspaceRoot: '/fallback' })
     expect(ctx.sandboxPolicy.resolve({ session: session('sess-no-cwd') }).workspaceRoot).toBe(resolve('/fallback'))
@@ -148,7 +164,7 @@ describe('SandboxPolicyService', () => {
 })
 
 describe('sandbox:policy request context', () => {
-  async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string } = {}): Promise<Context> {
+  async function promptMounted(config: { mode?: 'read-only' | 'workspace-write' | 'danger-full-access'; workspaceRoot?: string; lockDeploymentPolicy?: boolean } = {}): Promise<Context> {
     const ctx = new Context()
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(SessionProjectionRegistry)

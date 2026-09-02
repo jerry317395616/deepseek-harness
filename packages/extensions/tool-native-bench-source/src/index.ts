@@ -44,6 +44,8 @@ export const SOURCE_GRACE_MS = 1_000
 export interface Config {
   /** Absolute Native Bench root containing apps, sites and config. */
   benchRoot: string
+  /** App that owns every generated or edited business extension. */
+  extensionApp?: string
   /** Maximum matches retained inline by one source search. */
   maxMatches?: number
   /** Maximum bytes retained for one matched-line preview. */
@@ -61,6 +63,7 @@ export interface Config {
 /** Schema for deployment-owned Native Bench paths and output limits. */
 export const Config: z<Config> = z.object({
   benchRoot: z.string().required(),
+  extensionApp: z.string().default('tongjianyun'),
   maxMatches: z.number().step(1).min(1).max(1000).default(MAX_MATCHES),
   maxLineBytes: z.number().step(1).min(64).max(16_000).default(4_000),
   maxRawOutputBytes: z.number().step(1).min(1_024).max(MAX_RAW_OUTPUT_BYTES).default(MAX_RAW_OUTPUT_BYTES),
@@ -114,6 +117,33 @@ interface RouteTargetResult {
   }
   required_next_steps: string[]
 }
+
+type ExtensionChangeKind = 'form-ui' | 'list-ui' | 'desk-page' | 'custom-page' | 'add-field' | 'modify-field' | 'business-logic' | 'report' | 'workspace'
+
+interface ExtensionPlanResult {
+  change_kind: ExtensionChangeKind
+  source: RouteTargetResult
+  extension_app: string
+  allowed_write_root: string
+  upstream_source_files_read_only: string[]
+  suggested_extension_files: string[]
+  structural_change: boolean
+  requires_explicit_confirmation: boolean
+  ready: boolean
+  rules: string[]
+}
+
+const EXTENSION_CHANGE_KINDS = new Set<ExtensionChangeKind>([
+  'form-ui',
+  'list-ui',
+  'desk-page',
+  'custom-page',
+  'add-field',
+  'modify-field',
+  'business-logic',
+  'report',
+  'workspace',
+])
 
 const ROUTE_SCAN_IGNORED_DIRECTORIES = new Set([
   '.git',
@@ -418,6 +448,91 @@ async function resolveUiRoute(
   }
 }
 
+/** Validate a model-selected extension change kind against a closed vocabulary. */
+function extensionChangeKind(value: string): ExtensionChangeKind {
+  if (!EXTENSION_CHANGE_KINDS.has(value as ExtensionChangeKind)) {
+    throw new Error(`change_kind must be one of: ${[...EXTENSION_CHANGE_KINDS].join(', ')}`)
+  }
+  return value as ExtensionChangeKind
+}
+
+/** Build Tongjianyun-owned extension targets from an already resolved route. */
+async function planTongjianyunExtension(
+  roots: BenchRoots,
+  config: ResolvedConfig,
+  input: string,
+  requestedKind: string,
+  signal: AbortSignal,
+): Promise<ExtensionPlanResult> {
+  const changeKind = extensionChangeKind(requestedKind)
+  const source = await resolveUiRoute(roots, config, input, signal)
+  const extensionRoot = await resolveAppRoot(config.extensionApp, roots)
+  const app = config.extensionApp
+  const packageRoot = `${extensionRoot.display}/${app}`
+  const moduleRoot = `${packageRoot}/${app}`
+  const slug = source.route_slug
+  const sourceApp = source.matched_app ?? 'unresolved'
+  const structuralChange = changeKind === 'add-field' || changeKind === 'modify-field'
+  const suggested = new Set<string>([`${packageRoot}/hooks.py`])
+
+  if (structuralChange) {
+    suggested.add(`${packageRoot}/custom/${slug}.json`)
+    suggested.add(`${packageRoot}/public/js/${slug}.js`)
+  } else if (source.matched_app === app) {
+    source.target_files.forEach(path => suggested.add(path))
+  } else {
+    switch (changeKind) {
+      case 'form-ui':
+        suggested.add(`${packageRoot}/public/js/${slug}.js`)
+        break
+      case 'list-ui':
+        suggested.add(`${packageRoot}/public/js/${slug}_list.js`)
+        break
+      case 'desk-page':
+        suggested.add(`${packageRoot}/public/js/page_overrides/${slug}.js`)
+        break
+      case 'custom-page':
+        suggested.add(`${moduleRoot}/page/${slug}/${slug}.js`)
+        suggested.add(`${moduleRoot}/page/${slug}/${slug}.json`)
+        suggested.add(`${moduleRoot}/page/${slug}/${slug}.py`)
+        break
+      case 'business-logic':
+        suggested.add(`${packageRoot}/integrations/${frappeSlug(sourceApp)}/${slug}.py`)
+        break
+      case 'report':
+        suggested.add(`${moduleRoot}/report/${slug}/${slug}.js`)
+        suggested.add(`${moduleRoot}/report/${slug}/${slug}.json`)
+        suggested.add(`${moduleRoot}/report/${slug}/${slug}.py`)
+        break
+      case 'workspace':
+        suggested.add(`${moduleRoot}/workspace/${slug}/${slug}.json`)
+        break
+    }
+  }
+  suggested.add(`${packageRoot}/tests/test_${slug}_extension.py`)
+
+  return {
+    change_kind: changeKind,
+    source,
+    extension_app: app,
+    allowed_write_root: extensionRoot.display,
+    upstream_source_files_read_only: source.matched_app === app ? [] : source.target_files,
+    suggested_extension_files: [...suggested].sort(),
+    structural_change: structuralChange,
+    requires_explicit_confirmation: structuralChange,
+    ready: source.target_lock.ready,
+    rules: [
+      `允许读取 Native Bench 所有应用；业务源码只允许写入 ${extensionRoot.display}。`,
+      '禁止修改 Frappe、Education、ERPNext、IONE Core 等上游应用源码。',
+      '禁止新增 DocType，也禁止直接修改任何上游 DocType JSON。',
+      structuralChange
+        ? '字段结构请求必须先列出目标 DocType、字段、类型、默认值、权限与数据迁移影响，获得用户明确确认后才可通过 Tongjianyun Custom Field/Property Setter fixture 实施。'
+        : '当前请求不是字段结构变更，不得顺带创建 Custom Field、Property Setter 或数据库结构变更。',
+      '实施后运行相关测试、构建/缓存更新，并在用户原始路由做浏览器验证。',
+    ],
+  }
+}
+
 /** Validate a single positive ripgrep glob. */
 function validateInclude(include: string | undefined): void {
   if (include === undefined) return
@@ -635,6 +750,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       '- 用户提供 /desk、/app URL 或明确路由时，任何搜索、编辑、清缓存或重启之前都必须先调用 native_bench_resolve_ui_route。',
       '- 禁止仅凭中文页面标题、相似文件名或同名 Report 推断修改目标；必须先建立“原始 URL → UI 类型 → 前端入口 → frappe.call 后端方法”调用链。',
       '- native_bench_resolve_ui_route 的 target_lock.ready 不为 true 时不得编辑；应继续只读取证，消除未解析或多应用歧义。',
+      '- 修改任意 Frappe 业务界面或逻辑前，还必须调用 native_bench_plan_tongjianyun_extension；可以读取所有应用，但所有业务源码变更只能写入配置的 Tongjianyun 扩展应用。',
+      '- Frappe、Education、ERPNext、IONE Core 等上游应用是只读事实来源，不得直接修改。禁止新增 DocType，禁止直接修改上游 DocType JSON。',
+      '- 只有用户明确要求字段结构变更且已预览目标、字段、权限和迁移影响时，才可在 Tongjianyun 中维护 Custom Field/Property Setter fixture；普通 UI 请求不得顺带改结构。',
       '- UI 修改后必须在用户给出的原始路由验证实际显示；只验证 Python 返回值、清除缓存或重启进程不能证明界面修改完成。',
       '- 涉及任意 Native Bench 应用业务逻辑时，先用 native_bench_search_code 搜索，再用 native_bench_read_file 读取上下文。',
       '- 涉及运行配置时使用 native_bench_runtime_status；该工具不会返回站点密钥或数据库密码。',
@@ -672,6 +790,43 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     },
     timeoutMs: resolved.timeoutMs,
     execute: (args, exec) => resolveUiRoute(roots, resolved, args.url_or_route, exec.signal) as Promise<unknown> as Promise<JsonValue>,
+  })))
+
+  ctx.effect(() => ctx.tools.register(defineTool({
+    name: 'native_bench_plan_tongjianyun_extension',
+    description: '解析真实 Frappe 路由，并把界面、字段、报表或业务逻辑修改规划到 Tongjianyun 应用内。返回只读上游来源、允许写入根目录、建议扩展文件和结构变更确认要求。任何业务代码修改前必须调用。只读。',
+    parameters: {
+      url_or_route: { type: 'string', required: true, description: '用户正在查看的完整 URL 或 Frappe 路由。' },
+      change_kind: { type: 'string', required: true, description: '变更类型：form-ui、list-ui、desk-page、custom-page、add-field、modify-field、business-logic、report 或 workspace。' },
+    },
+    output: {
+      schema: { type: 'json' as const },
+      render: (_args: unknown, value: JsonValue) => {
+        const result = value as unknown as ExtensionPlanResult
+        return [{
+          type: 'text' as const,
+          text: [
+            `目标路由：${result.source.route_path}`,
+            `上游来源：${result.source.matched_app ?? '未锁定'} / ${result.source.route_kind}`,
+            `扩展应用：${result.extension_app}`,
+            `唯一允许写入：${result.allowed_write_root}`,
+            `可实施：${result.ready ? '是' : '否'}`,
+            `结构变更：${result.structural_change ? '是' : '否'}；明确确认：${result.requires_explicit_confirmation ? '需要' : '不需要'}`,
+            ...result.upstream_source_files_read_only.map(path => `只读上游文件：${path}`),
+            ...result.suggested_extension_files.map(path => `建议扩展文件：${path}`),
+            ...result.rules.map(rule => `规则：${rule}`),
+          ].join('\n'),
+        }]
+      },
+    },
+    timeoutMs: resolved.timeoutMs,
+    execute: (args, exec) => planTongjianyunExtension(
+      roots,
+      resolved,
+      args.url_or_route,
+      args.change_kind,
+      exec.signal,
+    ) as Promise<unknown> as Promise<JsonValue>,
   })))
 
   const searchOutput = {

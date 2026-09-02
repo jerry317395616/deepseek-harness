@@ -75,6 +75,12 @@ export interface Config {
    * `process.cwd()`). Normal agent calls use their session cwd instead.
    */
   workspaceRoot?: string
+  /**
+   * Pin every session and approved call to the deployment mode and root. This
+   * is intended for hosted installations whose writable source boundary must
+   * not follow a user-selected workspace or permission preset.
+   */
+  lockDeploymentPolicy?: boolean
 }
 
 /** Inputs that select the sandbox policy for one capability call. */
@@ -113,6 +119,7 @@ export class SandboxPolicyService extends Service {
     // No schema default: process.cwd() is resolved in the constructor so the
     // stored root is always absolute regardless of how it was supplied.
     workspaceRoot: z.string(),
+    lockDeploymentPolicy: z.boolean().default(false),
   })
 
   static inject = ['sessionProjections']
@@ -121,6 +128,8 @@ export class SandboxPolicyService extends Service {
   readonly defaultMode: SandboxMode
   /** The absolute `workspace-write` fallback root for calls without a session cwd. */
   readonly workspaceRoot: string
+  /** Whether session cwd and mode overrides are ignored for this deployment. */
+  readonly lockDeploymentPolicy: boolean
   constructor(ctx: Context, config: Config) {
     super(ctx, 'sandboxPolicy')
     // schemastery (static Config) already filled `mode`; the cast records that
@@ -128,6 +137,7 @@ export class SandboxPolicyService extends Service {
     // the process cwd is real branching, resolved absolute either way.
     this.defaultMode = config.mode as SandboxMode
     this.workspaceRoot = resolveWorkspaceRoot(config.workspaceRoot ?? process.cwd())
+    this.lockDeploymentPolicy = config.lockDeploymentPolicy ?? false
 
     ctx.sessionProjections.register({
       key: 'sandboxMode',
@@ -163,8 +173,12 @@ export class SandboxPolicyService extends Service {
   resolve(request: SandboxPolicyRequest = {}): SandboxExecutionPolicy {
     const { session } = request
     return {
-      mode: request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
-      workspaceRoot: resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
+      mode: this.lockDeploymentPolicy
+        ? this.defaultMode
+        : request.mode ?? (session === undefined ? undefined : this.overrideOf(session)) ?? this.defaultMode,
+      workspaceRoot: this.lockDeploymentPolicy
+        ? this.workspaceRoot
+        : resolveWorkspaceRoot(session?.header.cwd ?? this.workspaceRoot),
       ...session === undefined ? {} : { sessionId: session.id },
     }
   }
