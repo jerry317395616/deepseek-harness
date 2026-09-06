@@ -194,6 +194,11 @@ Requires: `typert`
 export interface Config {
   /** WebSocket Ping interval from 1 through 2,147,483,647 milliseconds. @default 2000 */
   readonly websocketHeartbeatIntervalMs?: number
+  /** Exact Remote endpoints permitted for this Host; 'all' (default) permits all; [] denies all.
+   * Includes the reserved $events and $events/result endpoints only when named.
+   * Applies before receiver/lookup resolution; not a per-user or filesystem policy.
+   */
+  readonly allowedEndpoints?: 'all' | string[]
 }
 ```
 

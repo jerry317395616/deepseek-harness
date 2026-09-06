@@ -119,6 +119,11 @@ const DEFAULT_WEBSOCKET_HEARTBEAT_INTERVAL_MS = 2_000
 export interface Config {
   /** WebSocket Ping interval from 1 through 2,147,483,647 milliseconds. @default 2000 */
   readonly websocketHeartbeatIntervalMs?: number
+  /** Exact Remote endpoints permitted for this Host; 'all' (default) permits all; [] denies all.
+   * Includes the reserved $events and $events/result endpoints only when named.
+   * Applies before receiver/lookup resolution; not a per-user or filesystem policy.
+   */
+  readonly allowedEndpoints?: 'all' | string[]
 }
 
 interface ResolvedConfig extends Config {
@@ -169,6 +174,10 @@ export class TypertGatewayError extends RemoteError<TypertGatewayErrorCode> {
 export class TypertGatewayService extends Service implements TypertGateway {
   static inject = ['typert']
   static Config: z<Config> = z.object({
+    allowedEndpoints: z.union([
+      z.const('all'),
+      z.array(z.string().pattern(/^(?:[A-Za-z_$][A-Za-z0-9_$.-]*\/[A-Za-z_$][A-Za-z0-9_$.-]*|\$events)$/)),
+    ]).default('all'),
     websocketHeartbeatIntervalMs: z.number().step(1).min(1).max(MAX_TIMER_DELAY_MS)
       .default(DEFAULT_WEBSOCKET_HEARTBEAT_INTERVAL_MS),
   })
@@ -179,6 +188,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     failure: error => rpcError(error),
   }
 
+  private readonly allowedEndpoints: ReadonlySet<string> | undefined
   private srcClaims: ReadonlySet<string> | undefined
   private remoteEvents: RegisteredRemoteEventSource | undefined
   private readonly remoteEventClients = new Map<RemoteEventClientId, RemoteEventClient>()
@@ -192,6 +202,9 @@ export class TypertGatewayService extends Service implements TypertGateway {
   constructor(ctx: Context, config: Config) {
     super(ctx, 'typertGateway')
     const resolved = config as ResolvedConfig
+    this.allowedEndpoints = config.allowedEndpoints === undefined || config.allowedEndpoints === 'all'
+      ? undefined
+      : new Set(config.allowedEndpoints)
     ctx.on('internal/service', () => {
       this.srcClaims = undefined
     })
@@ -356,6 +369,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
   ): Promise<ConnectionRpcResult> {
     if (endpoint === REMOTE_EVENT_RESULT_ENDPOINT) {
       try {
+        this.assertEndpointAllowed(endpoint)
         const result = parseRemoteEventResultPayload(payload)
         const client = this.remoteEventClients.get(result.clientId)
         if (client === undefined) {
@@ -376,6 +390,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
     signal: AbortSignal,
   ): Promise<AsyncIterable<unknown>> {
     if (endpoint === REMOTE_EVENT_STREAM_ENDPOINT) {
+      this.assertEndpointAllowed(endpoint)
       return this.openRemoteEvents(payload, signal)
     }
     return this.stream(remoteRequest(endpoint, payload, signal))
@@ -599,8 +614,19 @@ export class TypertGatewayService extends Service implements TypertGateway {
     }
   }
 
+  private assertEndpointAllowed(endpoint: string): void {
+    if (this.allowedEndpoints !== undefined && !this.allowedEndpoints.has(endpoint)) {
+      throw new TypertGatewayError(
+        'gateway/forbidden',
+        endpoint,
+        'endpoint is not permitted by this Host configuration',
+      )
+    }
+  }
+
   private async prepareInvocation(request: InvokeRemoteRequest): Promise<PreparedInvocation> {
     const endpoint = endpointOf(request.namespace, request.method)
+    this.assertEndpointAllowed(endpoint)
     const descriptor = this.resolveDescriptor(request.namespace, request.method, endpoint)
     assertExactArguments(request.args, descriptor, endpoint)
     const receiverContext = await this.resolveReceiverContext(descriptor, request.args, endpoint)

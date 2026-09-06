@@ -165,6 +165,7 @@ type TypertGatewayErrorCode =
   | 'gateway/context-not-found'
   | 'gateway/context-unavailable'
   | 'gateway/definition-unavailable'
+  | 'gateway/forbidden'
   | 'gateway/input-invalid'
   | 'gateway/invocation-unavailable'
   | 'gateway/lookup-failed'

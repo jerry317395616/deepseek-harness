@@ -30,6 +30,8 @@ kind: "package-reference"
 
 Connection 可用时，Host 入口会在 Connection 共享的 `/api` FetchHandler 上注册 trusted-host interceptor。Connection 把这个复合 handler 交给 HTTP bridge；handler 将已认领 endpoint 分发给 Gateway，未认领且没有精确 Fetch 路由负责的请求返回 404。直接调用 `invoke()` 会保留业务错误；`TypertGatewayError` 是 `RemoteError` 的子类，其 `gateway/*` 码命名了分发、绑定、提供方、查找、Context、参数和编解码器各自负责的故障。因策略而拒绝的 resolver——冷恢复失败或 ownership fence——抛出自己的 `RemoteError`，它选定的码原样到达调用方。
 
+Host 部署可以把 `allowedEndpoints` 配置为精确的 Remote 端点名单。默认值 `all` 不限制端点选择；`[]` 拒绝所有 Gateway 调用。名单不接受通配符或路径前缀。Gateway 在自身生命周期内固定使用这份名单，并在解析描述符、接收者 Context 或查找参数之前，以 `gateway/forbidden` 拒绝名单外的调用。同一检查覆盖 HTTP 一元调用、Host 直接调用，以及每条 WebSocket 或进程内逻辑流；`$events` 和 `$events/result` 必须分别显式列入名单。
+
 支持取消的 Remote 方法会把 `signal: AbortSignal` 声明为最后一个 Host 参数。signal 是 descriptor 元数据，而不是 wire 参数：Connection 将它提供给 Gateway，Gateway 则在已解码的业务参数之后注入它。SRC 识别这个保留的末位参数名，严格生成还要求它具有全局 `AbortSignal` 类型。
 
 流式 Remote 使用 `@Remote({ mode: 'stream' })` 并返回 `Iterable` 或 `AsyncIterable`。`ctx.typertGateway.stream()` 执行与一元调用相同的 endpoint、参数、lookup 和取消校验，再用生成的 result codec 校验每个产出项。Client 插件激活时打开 Gateway 自有的 `/api/remote.mux` WebSocket，并让它在空闲时保持连接。Connection 拥有重试调度；每次 retry 前，它要求 mux 取消候选或活动 socket，并且只做一次全新的物理连接尝试。Host 按配置的 `websocketHeartbeatIntervalMs` 间隔（默认 2 秒）发送 Ping 控制帧，浏览器在 WebSocket 协议层自动回复 Pong，使空闲网络中间层持续看到流量，而不新增 Remote stream frame。若 socket 尚未回复上一次 Ping，Host 会在下一间隔终止它。可独立取消的逻辑流共享这条连接；进程内 Connection 载体直接提供等价的流，不打开该 WebSocket。
@@ -68,6 +70,7 @@ Host 组合可通过 `registerRemoteEvents()` 注册唯一的应用事件 source
 
 <a id="known-limitations-and-deferred-work"></a>
 
+- `allowedEndpoints` 限制 Gateway 分派，不限制业务服务的直接调用、其他 Connection 通道、精确 Fetch 路由、工具、文件或操作系统访问。它是整个 Host 的策略，不代表用户或会话所有权。允许的端点仍保有其参数赋予的全部权限；允许 `$events` 会转发完整的已配置事件名单。员工部署仍需隔离运行时和主目录、受限组合、应用所有权检查，以及对已打开连接的撤销机制。替换策略需要替换 Gateway；修改已捕获的配置数组不会扩大权限。
 - Connection 适配器对分发故障与未归类异常答以 `gateway/internal`，且不附带详细信息；拥有方或 Gateway 自己抛出的 `RemoteError` 带着自有码、message 与 details 过线。其 `cause` 链与 `TypertGatewayError` 子类身份只对同进程调用方留存。
 - SRC 模式仅支持名称唯一的标识符参数，不支持解构、默认值或剩余参数。它只校验值能否安全表示为 JSON，不校验生成的业务类型，也绝不会推断可选字段。
 - Client 侧只能挂载严格模式生成的贡献项。SRC 标记不具备 Client 编解码器或类型投影。
