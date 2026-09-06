@@ -1,0 +1,8 @@
+version: 1
+scenario: employee-readonly
+profile: web
+composition: employee-readonly
+recording: authored
+header:
+  class: employee-readonly
+  pin: true

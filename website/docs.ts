@@ -162,6 +162,14 @@ const homeAndGuide = pairedPages([
     section: { root: '集成', en: 'Integrations' },
     order: 1,
   },
+  {
+    source: 'docs/user/guide/employee-readonly.md',
+    route: 'guide/employee-readonly.md',
+    label: { root: '员工只读预览', en: 'Employee read-only preview' },
+    sidebar: { root: 'zh-guide', en: 'en-guide' },
+    section: { root: '集成', en: 'Integrations' },
+    order: 2,
+  },
 ])
 
 const develop = pairedPages([
