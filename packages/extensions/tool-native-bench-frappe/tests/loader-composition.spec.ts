@@ -65,7 +65,7 @@ afterEach(async () => {
   root = undefined
 })
 
-async function loadComposition(): Promise<Context> {
+async function loadComposition(business = false): Promise<Context> {
   root = await mkdtemp(join(tmpdir(), 'dsh-native-bench-frappe-loader-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
@@ -79,7 +79,12 @@ async function loadComposition(): Promise<Context> {
     '    benchRoot: /active/native-bench',
     '    site: child.myyr.top',
     '    pythonExecutable: /active/native-bench/env/bin/python',
-    '    frappeUser: Administrator',
+    `    frappeUser: ${business ? 'teacher@example.test' : 'Administrator'}`,
+    ...(business ? [
+      '    accessMode: business',
+      '    actorTokenFile: /private/teacher.assertion',
+      '    businessDoctypes: [Student]',
+    ] : []),
     '    timeoutMs: 5000',
     '',
   ].join('\n'))
@@ -111,6 +116,44 @@ async function loadComposition(): Promise<Context> {
 }
 
 describe('Native Bench Frappe Loader composition', () => {
+  it('loads only scoped business reads and refuses updates before any subprocess', async () => {
+    const ctx = await loadComposition(true)
+    expect(ctx.tools.schemas().map(tool => tool.name)).toEqual([
+      'native_bench_frappe_describe_doctype',
+      'native_bench_frappe_list_documents',
+      'native_bench_frappe_get_document',
+    ])
+    const call = (name: string, arguments_: Record<string, unknown>) => ctx.tools.execute({
+      signal: new AbortController().signal,
+      callId: ToolCallId(name),
+      name,
+      arguments: arguments_,
+    })
+    const process = ctx.get('subprocess') as StubNativeSubprocess
+    const denied = await call('native_bench_frappe_list_documents', { doctype: 'Sales Invoice' })
+    expect(denied.isError).toBe(true)
+    expect(process.specs).toHaveLength(0)
+    const update = await call('native_bench_frappe_apply_document_update', {
+      doctype: 'Student', name: 'STU-001', changes: { enabled: 0 }, preview_id: 'a'.repeat(64),
+    })
+    expect(update.isError).toBe(true)
+    expect(process.specs).toHaveLength(0)
+    const result = await call('native_bench_frappe_get_document', { doctype: 'Student', name: 'STU-001' })
+    expect(result.isError).toBe(false)
+    expect(process.specs[0]?.argv).toContain('--actor-token-file')
+    expect(process.specs[0]?.argv).toContain('teacher@example.test')
+    expect(process.specs[0]?.stdio.stdin).toMatchObject({
+      data: JSON.stringify({ arguments: { doctype: 'Student', name: 'STU-001' } }),
+    })
+    expect((await ctx.systemPrompt.assemble()).sections.find(
+      section => section.name === 'tool:native-bench-frappe',
+    )?.text).toContain('每次读取都由服务端校验签名登录身份')
+    const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'native-bench-frappe')
+    if (entry === undefined) throw new Error('business entry is missing')
+    await entry._dispose()
+    expect(ctx.tools.schemas()).toEqual([])
+  })
+
   it('loads the platform tools and routing guidance, executes discovery, and disposes both', async () => {
     const ctx = await loadComposition()
     expect(ctx.tools.schemas().map(tool => tool.name)).toEqual([

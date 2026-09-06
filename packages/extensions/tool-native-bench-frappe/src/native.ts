@@ -27,6 +27,9 @@ export interface NativeFrappeSpec {
   pythonExecutable: string
   helperPath: string
   frappeUser: string
+  accessMode: 'maintenance' | 'business'
+  actorTokenFile: string
+  businessDoctypes: string[]
   maxOutputBytes: number
   maxInputBytes: number
   graceMs: number
@@ -42,6 +45,9 @@ export function resolveNativeFrappeSpec(config: {
   site?: string
   pythonExecutable?: string
   frappeUser?: string
+  accessMode?: string
+  actorTokenFile?: string
+  businessDoctypes?: string[]
   maxOutputBytes?: number
   maxInputBytes?: number
 }): NativeFrappeSpec {
@@ -62,6 +68,27 @@ export function resolveNativeFrappeSpec(config: {
   if (frappeUser === '' || frappeUser.length > 254 || /[\r\n]/u.test(frappeUser)) {
     throw new Error('native-bench-frappe: frappeUser must be a single account name')
   }
+  const accessMode = config.accessMode ?? 'maintenance'
+  if (accessMode !== 'maintenance' && accessMode !== 'business') {
+    throw new Error('native-bench-frappe: accessMode must be maintenance or business')
+  }
+  const actorTokenFile = config.actorTokenFile?.trim() ?? ''
+  const businessDoctypes = [...new Set(config.businessDoctypes ?? [])]
+  if (accessMode === 'business') {
+    if (!config.frappeUser?.trim() || frappeUser === 'Guest') {
+      throw new Error('native-bench-frappe: business mode requires an explicit expected Frappe user')
+    }
+    if (!isAbsolute(actorTokenFile) || /[\u0000\r\n]/u.test(actorTokenFile)) {
+      throw new Error('native-bench-frappe: business mode requires an absolute private actor token file')
+    }
+    if (businessDoctypes.length === 0 || businessDoctypes.length > 64
+      || businessDoctypes.some(doctype => !doctype.trim() || doctype !== doctype.trim()
+        || doctype.length > 140 || /[\u0000\r\n]/u.test(doctype))) {
+      throw new Error('native-bench-frappe: business mode requires 1 to 64 explicit DocTypes')
+    }
+  } else if (actorTokenFile !== '' || businessDoctypes.length > 0) {
+    throw new Error('native-bench-frappe: actor credentials and business scope require business mode')
+  }
   const maxOutputBytes = config.maxOutputBytes ?? 1_000_000
   if (!Number.isInteger(maxOutputBytes) || maxOutputBytes < 16_384 || maxOutputBytes > 5_000_000) {
     throw new Error('native-bench-frappe: maxOutputBytes must be an integer from 16384 to 5000000')
@@ -76,6 +103,9 @@ export function resolveNativeFrappeSpec(config: {
     pythonExecutable,
     helperPath: fileURLToPath(new URL('../python/native_frappe_query.py', import.meta.url)),
     frappeUser,
+    accessMode,
+    actorTokenFile,
+    businessDoctypes,
     maxOutputBytes,
     maxInputBytes,
     graceMs: 2_000,
@@ -104,6 +134,14 @@ export class NativeFrappeClient {
     if (!NATIVE_FRAPPE_OPERATIONS.has(operation)) {
       throw new Error('native-bench-frappe: only allowlisted Frappe operations are available')
     }
+    if (this.spec.accessMode === 'business') {
+      if (!['frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document'].includes(operation)) {
+        throw new Error('native-bench-frappe: business mode only permits scoped reads')
+      }
+      if (typeof arguments_.doctype !== 'string' || !this.spec.businessDoctypes.includes(arguments_.doctype)) {
+        throw new Error('native-bench-frappe: DocType is outside the configured business scope')
+      }
+    }
     if (signal.aborted) throw new Error('native-bench-frappe: Frappe request was cancelled')
     const payload = JSON.stringify({ arguments: normalizeArguments(operation, arguments_) })
     if (Buffer.byteLength(payload, 'utf8') > this.spec.maxInputBytes) {
@@ -119,6 +157,11 @@ export class NativeFrappeClient {
           '--site', this.spec.site,
           '--user', this.spec.frappeUser,
           '--operation', operation,
+          ...(this.spec.accessMode === 'business' ? [
+            '--access-mode', 'business',
+            '--actor-token-file', this.spec.actorTokenFile,
+            '--business-doctypes', JSON.stringify(this.spec.businessDoctypes),
+          ] : []),
           '--max-input-bytes', String(this.spec.maxInputBytes),
           '--max-output-bytes', String(this.spec.maxOutputBytes),
         ],

@@ -1,0 +1,14 @@
+# Adapter-policy regression only; this is not a staff deployment profile.
+# Both attempts must fail before any Frappe subprocess or credential read.
+- insert:
+    - id: tool-native-bench-frappe
+      name: '@deepseek-ai/dsh-tool-native-bench-frappe'
+      config:
+        accessMode: business
+        benchRoot: /nonexistent/native-bench
+        site: example.test
+        pythonExecutable: /nonexistent/python
+        frappeUser: teacher@example.test
+        actorTokenFile: /nonexistent/teacher.assertion
+        businessDoctypes: [Student]
+        timeoutMs: 5000

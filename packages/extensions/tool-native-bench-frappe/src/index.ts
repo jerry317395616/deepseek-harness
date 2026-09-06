@@ -27,8 +27,14 @@ export interface Config {
   site?: string
   /** Optional Python executable; relative paths resolve under benchRoot. */
   pythonExecutable?: string
-  /** Fixed deployment-owned Frappe account used for permission checks. */
+  /** Fixed expected Frappe account; only maintenance defaults an empty value to Administrator. */
   frappeUser?: string
+  /** Maintenance retains approved updates; business requires a signed, pinned actor and read scope. */
+  accessMode?: 'maintenance' | 'business'
+  /** Private POSIX file read only by the Frappe helper, never by model-facing tools. */
+  actorTokenFile?: string
+  /** Explicit DocType allowlist for business reads; Frappe permissions still apply. */
+  businessDoctypes?: string[]
   /** Maximum captured helper output in bytes. */
   maxOutputBytes?: number
   /** Maximum serialized model arguments sent to the helper. */
@@ -42,7 +48,10 @@ export const Config: z<Config> = z.object({
   benchRoot: z.string().default('/home/zyd/frappe/native-bench'),
   site: z.string().default('child.myyr.top'),
   pythonExecutable: z.string().default(''),
-  frappeUser: z.string().default('Administrator'),
+  frappeUser: z.string().default(''),
+  accessMode: z.union(['maintenance', 'business'] as const).default('maintenance'),
+  actorTokenFile: z.string().default(''),
+  businessDoctypes: z.array(z.string()).default([]),
   maxOutputBytes: z.number().step(1).min(16_384).max(5_000_000).default(1_000_000),
   maxInputBytes: z.number().step(1).min(16_384).max(1_000_000).default(256_000),
   timeoutMs: z.number().step(1).min(1_000).max(120_000).default(30_000),
@@ -56,7 +65,12 @@ export function apply(ctx: Context, config: Config): void {
   ctx.effect(() => ctx.systemPrompt.section({
     name: 'tool:native-bench-frappe',
     order: 114,
-    text: [
+    text: resolved.accessMode === 'business' ? [
+      'Native Bench Frappe 业务读取规则：',
+      '- 只可描述、列表查询或读取部署允许的 DocType；必须使用明确的 DocType 名称。',
+      '- 每次读取都由服务端校验签名登录身份、账号启用状态和 Frappe 权限；不能指定或更换执行账号。',
+      '- 不允许修改、预览修改、执行代码或维护操作；缺少授权时报告原因，不得改用其他接口绕过。',
+    ].join('\n') : [
       'Native Bench Frappe 数据规则：',
       '- 先用 native_bench_frappe_platform_catalog 确认站点、安装应用和可访问 DocType；用 native_bench_frappe_describe_doctype 读取字段与当前账号权限。',
       '- 需要查询业务文档时，使用 native_bench_frappe_list_documents 或 native_bench_frappe_get_document；这些工具直接在配置的 Frappe 站点 ORM 上下文中执行。',
@@ -70,6 +84,12 @@ export function apply(ctx: Context, config: Config): void {
   }))
 
   ctx.on('tools/pre-execute', async (execution, next): Promise<PreToolDecision> => {
+    if (resolved.accessMode === 'business'
+      && execution.name.startsWith('native_bench_frappe_')
+      && !['native_bench_frappe_describe_doctype', 'native_bench_frappe_list_documents',
+        'native_bench_frappe_get_document'].includes(execution.name)) {
+      return { kind: 'deny', reason: '当前业务模式仅允许已授权的数据读取。' }
+    }
     if (execution.name !== 'native_bench_frappe_apply_document_update') return next()
     return {
       kind: 'ask',
@@ -82,7 +102,7 @@ export function apply(ctx: Context, config: Config): void {
     render: (_arguments: unknown, value: JsonValue) => [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
   }
 
-  ctx.effect(() => ctx.tools.register(defineTool({
+  if (resolved.accessMode === 'maintenance') ctx.effect(() => ctx.tools.register(defineTool({
     name: 'native_bench_frappe_platform_catalog',
     description: '读取当前 Native Bench 站点的已安装应用和当前 Frappe 账号可读取的 DocType 目录，并标注读、写和新建权限。目录来自实时 Frappe 元数据，不读取密码或密钥。',
     parameters: {
@@ -149,6 +169,8 @@ export function apply(ctx: Context, config: Config): void {
       exec.signal,
     ),
   })))
+
+  if (resolved.accessMode === 'business') return
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'native_bench_frappe_preview_document_update',

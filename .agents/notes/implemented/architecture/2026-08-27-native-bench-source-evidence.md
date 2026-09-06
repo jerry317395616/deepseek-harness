@@ -18,6 +18,8 @@ The `@deepseek-ai/dsh-tool-native-bench-frappe` package provides the correspondi
 
 The `@deepseek-ai/dsh-ione-native-bench-source` Bundle owns the opt-in patch entry. The production profile enables that entry with bounded limits. The nutrition package accepts reports generated under the Native Bench root while retaining the existing authenticated public download directory and database permission boundary.
 
+Business-mode deployment uses an explicit expected user, a private signed actor assertion and a DocType allowlist. The adapter admits only describe/list/get reads, checks the signed actor against the expected user, and requires an enabled System User. Both process entry and client execution reject unsupported actions. This is a transport-level foundation: it does not provide shared-Web-session identity, class ownership, assertion renewal or isolation from other plugins. The focused Loader and Python policy tests cover these denials; a staff Web rollout remains gated on per-user session and capability isolation.
+
 ## Consequences
 
 - Questions about nutrition calculations can combine exact source lines from `native-bench/apps` with current database rules and recipe data without a localhost or public MCP network hop.

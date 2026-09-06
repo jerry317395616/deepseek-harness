@@ -18,6 +18,8 @@ Status: implemented
 
 `@deepseek-ai/dsh-ione-native-bench-source` Bundle 负责可选补丁入口。生产 Profile 使用有界配置启用该入口。营养包接受 Native Bench 根目录下生成的报告，同时保留现有认证公开下载目录和数据库权限边界。
 
+业务模式部署使用明确的预期账号、私有签名身份断言及 DocType 白名单。适配器只允许描述、列表和单条读取，核对签名身份与预期账号，并要求账号为启用的系统用户。进程入口和客户端执行均拒绝不支持的操作。这是传输层基础，不提供共享 Web 会话身份、班级归属、断言续期或其他插件隔离。聚焦的 Loader 与 Python 策略测试覆盖这些拒绝路径；向岗位用户开放 Web 入口仍以逐用户会话和能力隔离为前提。
+
 ## Consequences
 
 - 营养计算问题可以在不经过 localhost 或公网 MCP 网络跳转的情况下，把 `native-bench/apps` 的精确源码行与当前数据库规则、食谱数据结合起来。

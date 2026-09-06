@@ -1,0 +1,10 @@
+version: 1
+scenario: native-frappe-business-denial
+profile: headless
+composition: native-frappe-business
+recording: authored
+header:
+  class: native-frappe-business
+  pin: true
+platform: posix
+permission: read-only

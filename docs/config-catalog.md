@@ -1672,6 +1672,12 @@ export interface Config {
    * `process.cwd()`). Normal agent calls use their session cwd instead.
    */
   workspaceRoot?: string
+  /**
+   * Pin every session and approved call to the deployment mode and root. This
+   * is intended for hosted installations whose writable source boundary must
+   * not follow a user-selected workspace or permission preset.
+   */
+  lockDeploymentPolicy?: boolean
 }
 ```
 
@@ -2751,8 +2757,14 @@ export interface Config {
   site?: string
   /** Optional Python executable; relative paths resolve under benchRoot. */
   pythonExecutable?: string
-  /** Fixed deployment-owned Frappe account used for permission checks. */
+  /** Fixed expected Frappe account; only maintenance defaults an empty value to Administrator. */
   frappeUser?: string
+  /** Maintenance retains approved updates; business requires a signed, pinned actor and read scope. */
+  accessMode?: 'maintenance' | 'business'
+  /** Private POSIX file read only by the Frappe helper, never by model-facing tools. */
+  actorTokenFile?: string
+  /** Explicit DocType allowlist for business reads; Frappe permissions still apply. */
+  businessDoctypes?: string[]
   /** Maximum captured helper output in bytes. */
   maxOutputBytes?: number
   /** Maximum serialized model arguments sent to the helper. */
@@ -2775,6 +2787,14 @@ Requires: `tools` · `systemPrompt` · `subprocess` · `fs`
 export interface Config {
   /** Absolute Native Bench root containing apps, sites and config. */
   benchRoot: string
+  /** App that owns every generated or edited business extension. */
+  extensionApp?: string
+  /** Frappe site used by the fixed, approval-gated deployment actions. */
+  site?: string
+  /** Deployment-owned Bench executable; never supplied by the model. */
+  benchExecutable?: string
+  /** Timeout for a fixed build, migrate or clear-cache action. */
+  deployTimeoutMs?: number
   /** Maximum matches retained inline by one source search. */
   maxMatches?: number
   /** Maximum bytes retained for one matched-line preview. */
@@ -2790,7 +2810,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/extensions/tool-native-bench-source/src/index.ts:43`](../packages/extensions/tool-native-bench-source/src/index.ts)
+Source: [`packages/extensions/tool-native-bench-source/src/index.ts:44`](../packages/extensions/tool-native-bench-source/src/index.ts)
 
 <a id="deepseek-aidsh-tool-pwsh"></a>
 

@@ -15,6 +15,7 @@ import hmac
 import json
 import os
 import re
+import stat
 import sys
 from pathlib import Path
 from typing import Any
@@ -137,6 +138,9 @@ def main() -> int:
     parser.add_argument("--site", required=True)
     parser.add_argument("--user", required=True)
     parser.add_argument("--operation", required=True)
+    parser.add_argument("--access-mode", choices=["maintenance", "business"], default="maintenance")
+    parser.add_argument("--actor-token-file", default="")
+    parser.add_argument("--business-doctypes", default="[]")
     parser.add_argument("--max-input-bytes", required=True, type=int)
     parser.add_argument("--max-output-bytes", required=True, type=int)
     args = parser.parse_args()
@@ -165,7 +169,8 @@ def main() -> int:
     arguments = dict(request["arguments"])
     try:
         normalized = normalize_arguments(args.operation, arguments)
-    except ValueError as exc:
+        validate_access_policy(args, normalized)
+    except (ValueError, PermissionError) as exc:
         return emit_error(str(exc))
 
     bench_root = Path(args.bench_root).resolve()
@@ -184,8 +189,10 @@ def main() -> int:
 
         frappe.init(site=args.site, sites_path=str(sites_path))
         frappe.connect()
-        frappe.set_user(args.user)
-        result = run_operation(frappe, args.operation, normalized, args.user)
+        frappe.set_user("Guest")
+        actor = resolve_execution_user(frappe, args)
+        frappe.set_user(actor)
+        result = run_operation(frappe, args.operation, normalized, actor)
         return emit_ok(result, args.max_output_bytes)
     except Exception as exc:  # Frappe errors become structured, bounded failures.
         if frappe is not None:
@@ -201,6 +208,77 @@ def main() -> int:
             except Exception:
                 pass
         os.chdir(previous_cwd)
+
+
+def validate_access_policy(args: Any, arguments: dict[str, Any]) -> None:
+    """Reject unsupported actions before connecting to the business database."""
+    if args.access_mode == "maintenance":
+        if args.actor_token_file or args.business_doctypes != "[]":
+            raise ValueError("actor credentials and business scope require business mode")
+        return
+    if args.access_mode != "business":
+        raise ValueError("access mode is invalid")
+    if args.operation not in {"frappe_describe_doctype", "frappe_list_documents", "frappe_get_document"}:
+        raise ValueError("business mode only permits scoped reads")
+    try:
+        scope = json.loads(args.business_doctypes)
+    except (TypeError, ValueError):
+        raise ValueError("business DocType scope is invalid") from None
+    if (not isinstance(scope, list) or not 1 <= len(scope) <= 64
+            or any(not isinstance(name, str) or not name.strip() or name != name.strip()
+                   or len(name) > 140 or any(char in name for char in "\x00\r\n") for name in scope)):
+        raise ValueError("business DocType scope is invalid")
+    if arguments.get("doctype") not in scope:
+        raise PermissionError("DocType is outside the configured business scope")
+    if (not args.actor_token_file or not Path(args.actor_token_file).is_absolute()
+            or not args.user or args.user == "Guest"):
+        raise ValueError("business mode requires a private actor assertion and an expected user")
+
+
+def read_actor_assertion(path: str) -> str:
+    """Read a bounded owner-only POSIX assertion without following the final symlink."""
+    if os.name != "posix":
+        raise PermissionError("business identity requires a POSIX Native Bench host")
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        with os.fdopen(descriptor, "rb") as stream:
+            info = os.fstat(stream.fileno())
+            if (not stat.S_ISREG(info.st_mode) or info.st_uid != os.geteuid()
+                    or info.st_mode & 0o077 or info.st_nlink != 1
+                    or not 1 <= info.st_size <= 4096):
+                raise ValueError("unsafe assertion file")
+            raw = stream.read(4097)
+            if len(raw) > 4096:
+                raise ValueError("oversized assertion")
+            value = raw.decode("ascii").strip()
+            if not value:
+                raise ValueError("empty assertion")
+            return value
+    except (OSError, ValueError, UnicodeError):
+        raise PermissionError("private actor assertion is unavailable or unsafe") from None
+
+
+def resolve_execution_user(frappe: Any, args: Any) -> str:
+    """Bind business reads to the verified actor; neither mode accepts disabled users."""
+    user = args.user
+    if args.access_mode == "business":
+        assertion = read_actor_assertion(args.actor_token_file)
+        try:
+            from ione_core.mcp.identity import resolve_actor_user
+
+            actor = resolve_actor_user(assertion)
+        except Exception:
+            # Verification errors can include credential-bearing parser input.
+            raise PermissionError("business identity verification failed; sign in again") from None
+        if actor != user:
+            raise PermissionError("signed actor does not match the configured user")
+        user = actor
+    if not user or user == "Guest":
+        raise PermissionError("an enabled System User is required")
+    account = frappe.db.get_value("User", user, ["enabled", "user_type"], as_dict=True)
+    if not account or not account.enabled or account.user_type != "System User":
+        raise PermissionError("an enabled System User is required")
+    return user
 
 
 def normalize_arguments(operation: str, arguments: dict[str, Any]) -> dict[str, Any]:
