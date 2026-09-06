@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Use this package to inspect safe Frappe metadata and read permitted business records from the active Native Bench. A maintenance runtime can also preview and apply approved scalar updates to existing records. An opt-in business runtime accepts only scoped reads under a signed, explicitly pinned user identity. Frappe permissions remain authoritative; the adapter is not a multi-user Web gateway.
+Use this package to inspect safe Frappe metadata and read permitted business records from the active Native Bench. A maintenance runtime can also preview and apply approved scalar updates to existing records. An opt-in business runtime accepts only scoped reads under a signed, explicitly pinned user identity. Frappe permissions remain authoritative. An optional loopback login helper routes pre-provisioned employee hosts; it does not make a shared host multi-user safe.
 
 ## Table of Contents
 
@@ -59,6 +59,28 @@ A trusted bridge must supply and refresh one assertion for each isolated user ru
 
 List reads use structured filters, one-field sorting, up to 100 rows and up to 64 selected fields. Get reads use the same field limit. Protected infrastructure DocTypes and sensitive fields are excluded. Identity failures return fixed diagnostics; credential contents are absent from tool arguments, subprocess arguments and tool results.
 
+<a id="employee-login-routing-helper"></a>
+### Employee login routing helper
+
+The optional [Python helper](python/employee_gateway.py) accepts the signed handoff format emitted by the deployed Frappe launcher. It is not mounted by the Cordis plugin and does not start automatically. Its private JSON configuration requires these fields; unknown fields fail startup:
+
+| Field | Required value |
+|---|---|
+| `version` | `1` |
+| `issuer` | Exact issuing site hostname. |
+| `public_origin` | Exact HTTPS origin used for logout verification. |
+| `secret_file` | Absolute owner-only file holding the launcher signing key. |
+| `port` | Explicit loopback listener port, 1024–65535. |
+| `session_seconds` | Absolute login-session lifetime, 60–28800 seconds. |
+| `max_sessions` | Maximum live login sessions, 1–4096; replay entries are capped at four times this limit. |
+| `bindings` | 1–256 explicit `user`, `upstream`, `home`, `launch_file` objects. |
+
+Each binding requires a distinct `http://127.0.0.1:port`, non-overlapping owner-only home, and distinct private launch credential inside that home. Guest and Administrator bindings are refused. Configuration is immutable during one process lifetime. A request cannot choose or override an upstream. Invalid, expired, future-dated, reused or unbound-user handoffs return 401; a handoff must be issued strictly after process startup and last at most 60 seconds. Restart invalidates login sessions and rejects tickets issued before startup; obtain a new handoff after the first whole second.
+
+The reverse proxy must make `GET /auth` internal and use only its verified `X-Harness-Upstream` response for **every HTTP request and WebSocket upgrade**. `GET /sso?token=…` exchanges a handoff for a Secure, HttpOnly host cookie and redirects to that employee's launch URL. Same-origin `POST /logout` removes that login session. The helper omits request logging and sends no-store/no-referrer headers; deployment proxies must also omit credential query strings. It does not proxy traffic or protect direct runtime ports.
+
+Provisioning and live proxy integration are separate deployment work. A private home and route are not an operating-system sandbox: audit the runtime's plugins, filesystem, settings APIs and assertion renewal before admitting staff. Existing WebSocket streams are not revoked by logout; the deployment must close them during revocation. [Credential-free HTTP tests](tests/test_employee_gateway.py) exercise routing and rejection; they do not certify a production proxy or employee profile.
+
 ### Approved maintenance updates
 
 Preview checks an existing record and its proposed scalar changes without saving. Apply requires the exact preview id, document version and values, plus one-shot approval through Harness. It saves through the Frappe document lifecycle, so validation, hooks and ordinary Version tracking remain authoritative. Create, delete, submit, cancel, child-table and schema changes are not exposed.
@@ -95,7 +117,7 @@ These owners cover the adjacent integration boundaries.
 
 #### What the model sees
 
-Maintenance contributes a routing section and six tool schemas; business contributes a scoped-read routing section and three schemas. Results contain bounded, sanitized metadata or records. The configured account, site path, assertion path and executable are not model-call parameters.
+Maintenance contributes a routing section and six tool schemas; business contributes a scoped-read routing section and three schemas, including `native_bench_frappe_get_document`. The login routing helper contributes no model tools. Results contain bounded, sanitized metadata or records. The configured account, site path, assertion path and executable are not model-call parameters.
 
 #### Token effect
 
@@ -111,7 +133,7 @@ Changing the mounted mode changes the system-prompt and tool prefix. Database co
 
 The adapter constrains its own tools, not the complete application host.
 
-- **No multi-user gateway** — session ownership, login handoff, assertion issuance and renewal belong to the trusted host integration.
+- **No shared-host authorization** — the login helper routes distinct hosts, not owners inside one host; provisioning, assertion issuance and renewal remain deployment work.
 - **No class-ownership policy** — a DocType allowlist does not restrict a teacher to one class; Frappe role and record permissions must enforce that separately.
 - **No general workflow engine** — only approved maintenance scalar updates are writable; domain services must own other business transitions.
 - **No host-wide isolation** — other plugins, Web APIs, attachments and filesystem access need independent authorization. Business mode must not be enabled on a shared maintenance host.
