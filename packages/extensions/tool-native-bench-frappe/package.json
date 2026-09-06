@@ -30,6 +30,7 @@
     "lib/invariant.js",
     "python/native_frappe_query.py",
     "python/employee_gateway.py",
+    "python/native_actor_refresh.py",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",

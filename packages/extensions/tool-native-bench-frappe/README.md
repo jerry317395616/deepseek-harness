@@ -55,7 +55,7 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 Business mode registers only description, list and get. Both the TypeScript client and Python entrypoint reject discovery, updates and out-of-scope DocTypes. The Python helper reads an owner-only regular POSIX assertion file of at most 4096 bytes; it rejects final-component symlinks and hardlinks. It delegates signature, site, expiry and account resolution to `ione_core.mcp.identity.resolve_actor_user`. The verified account must exactly match `frappeUser`, and both modes require an enabled System User.
 
-A trusted bridge must supply and refresh one assertion for each isolated user runtime. This package does not issue assertions or associate shared Web sessions with users. Do not use the shared maintenance host as a staff deployment: other plugins, Web APIs, sessions and filesystem access need separate isolation.
+A trusted bridge must supply and refresh one assertion for each isolated user runtime. The separate [Native Bench renewer](#native-bench-assertion-renewal) provides that deployment operation; it does not associate shared Web sessions with users. Do not use the shared maintenance host as a staff deployment: other plugins, Web APIs, sessions and filesystem access need separate isolation.
 
 List reads use structured filters, one-field sorting, up to 100 rows and up to 64 selected fields. Get reads use the same field limit. Protected infrastructure DocTypes and sensitive fields are excluded. Identity failures return fixed diagnostics; credential contents are absent from tool arguments, subprocess arguments and tool results.
 
@@ -80,6 +80,26 @@ Each binding requires a distinct `http://127.0.0.1:port`, non-overlapping owner-
 The reverse proxy must make `GET /auth` internal and use only its verified `X-Harness-Upstream` response for **every HTTP request and WebSocket upgrade**. `GET /sso?token=…` exchanges a handoff for a Secure, HttpOnly host cookie and redirects to that employee's launch URL. Same-origin `POST /logout` removes that login session. The helper omits request logging and sends no-store/no-referrer headers; deployment proxies must also omit credential query strings. It does not proxy traffic or protect direct runtime ports.
 
 Provisioning and live proxy integration are separate deployment work. A private home and route are not an operating-system sandbox: audit the runtime's plugins, filesystem, settings APIs and assertion renewal before admitting staff. Existing WebSocket streams are not revoked by logout; the deployment must close them during revocation. [Credential-free HTTP tests](tests/test_employee_gateway.py) exercise routing and rejection; they do not certify a production proxy or employee profile.
+
+<a id="native-bench-assertion-renewal"></a>
+### Native Bench assertion renewal
+
+The optional [renewer](python/native_actor_refresh.py) runs with the active Bench Python environment as a trusted deployment process, not a model tool. Its `--config` argument names an owner-only JSON file with these exact fields:
+
+| Field | Required value |
+|---|---|
+| `version` | Integer `1`. |
+| `bench_root` | Absolute canonical Native Bench directory containing the site. |
+| `site` | Exact site hostname. |
+| `user` | Exact enabled System User name; Guest and Administrator are refused. |
+| `assertion_file` | Absolute file in a canonical owner-only directory. |
+| `ttl_seconds` | Explicit integer lifetime, 60–900 seconds. |
+
+The renewer reads the current account through Frappe ORM, signs the deployed I-ONE assertion format internally, and checks it through `ione_core.mcp.identity.resolve_actor_user` before publication. It never prints signing material or assertions, never copies credentials into model configuration, and never commits business records. `--check` verifies identity without publishing or revoking a file; success prints `employee identity verified`. Normal success prints `employee assertion refreshed`; failure exits nonzero with `employee assertion refresh failed`.
+
+Publication uses an exclusive private temporary file, file synchronization and atomic rename. Existing symlinks, hardlinks and public destinations are refused. Once a safe destination is open, a renewal failure revokes its previous assertion. Configuration/open failures and process termination can leave the earlier assertion until expiry. The deployment scheduler must serialize runs and renew before expiry; it must also stop renewal when an employee binding is removed. Removing a binding does not make its existing file disappear automatically.
+
+The issuer needs privileged local access to the site's signing configuration and database. Employee runtimes must not control this process, its configuration or the signing material. Private files owned by the same operating-system user do not isolate mutually untrusted processes. This helper does not repair a shared-host authorization policy or activate employee Web access.
 
 ### Approved maintenance updates
 
@@ -133,7 +153,7 @@ Changing the mounted mode changes the system-prompt and tool prefix. Database co
 
 The adapter constrains its own tools, not the complete application host.
 
-- **No shared-host authorization** — the login helper routes distinct hosts, not owners inside one host; provisioning, assertion issuance and renewal remain deployment work.
+- **No shared-host authorization** — the login helper routes distinct hosts, not owners inside one host; provisioning and scheduling the separate assertion renewer remain deployment work.
 - **No class-ownership policy** — a DocType allowlist does not restrict a teacher to one class; Frappe role and record permissions must enforce that separately.
 - **No general workflow engine** — only approved maintenance scalar updates are writable; domain services must own other business transitions.
 - **No host-wide isolation** — other plugins, Web APIs, attachments and filesystem access need independent authorization. Business mode must not be enabled on a shared maintenance host.
