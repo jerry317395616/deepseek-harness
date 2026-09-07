@@ -31,7 +31,7 @@ Client adapter 提供 `SessionEventStream`，即绑定到一个普通 Session �
 
 Session 对象还承载本地提交回显：`session.beginSubmission` 在调用方序列化与 prompt 之前，同步把一条回显写入 `SessionSnapshot.pendingSubmissions`，会话 UI 因此能在点击提交的当帧显示消息。Session 根据当前运行状态与请求的投递模式推导每条回显的 `transcript`、`queued` 或 `steering` 位置，并在序列化期间保留该位置。prompt 的 `requestId` 是关联标识：Host 把它回显为 durable user source 的 `rpcId`，queue occurrence 也把它投影为 `SessionQueuedItem.rpcId`。回显在观察到其 durable event 或 queue occurrence 后延迟一个动画帧退休，该延迟保证替代内容就绪前回显仍可渲染；带标识的 prompt 失败或被放弃时立即退休，销毁时按 failed 退休；每次退休恰好触发一次注册的 `onRetire` 回调。回显只存在于 Client 内存；刷新与重连只从 durable event 重建会话。
 
-可选的 `@deepseek-ai/dsh-api-session-controller/employee-access` 子路径挂载独立的账号所属会话 API，不改变普通 Host RPC 的授权契约。[共享员工预览指南](../../../docs/user/guide/employee-shared.zh.md)定义其明确配置、归属持久化及部署要求。员工可以创建会话、查看自己的列表及分页历史，并通过可信账号身份服务请求限定范围的 Frappe 读取。提示执行、模型工具、搜索、附件和全局流仍被拒绝；读取响应不追加到模型历史。
+可选的 `@deepseek-ai/dsh-api-session-controller/employee-access` 子路径挂载独立的账号所属会话 API。Host RPC 认证仍然独立，但通过 Host 命令也不能执行员工所属 Agent；不可被允许规则覆盖的工具检查拒绝员工所属及无 Agent 身份的工具调用。[共享员工预览指南](../../../docs/user/guide/employee-shared.zh.md)定义其明确配置、归属持久化及部署要求。员工可以创建会话、查看自己的列表及分页历史，并通过可信账号身份服务请求限定范围的 Frappe 读取。提示执行、模型工具、搜索、附件和全局流仍被拒绝；读取响应不追加到模型历史。
 
 -----
 

@@ -18,6 +18,8 @@ For read requests, the authority selects the existing pinned account configurati
 
 ## Alternatives considered
 
+**Use a Host prompt to execute an employee session.** Host authentication does not bind a Frappe account to queued work. The preview instead blocks owned Agent steps and requests, and its monotonic tool guard denies owned or actorless execution. Ownership is indexed before session creation and restored before admission; failed reservations remain blocked. The recorded persona test uses a separate unowned Host session. This preserves a closed execution path without pretending a login cookie authorizes an Agent turn.
+
 **Shared administrator execution with role text in a prompt.** Model instructions cannot enforce document, field or workflow permissions. Caller identity must come from authentication and remain fixed through execution.
 
 **Change all remote APIs and UI at once.** That would expose execution before the per-call identity bridge exists. The closed preview permits falsifiable two-account tests without publishing an incomplete employee entry.

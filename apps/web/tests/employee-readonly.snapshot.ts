@@ -30,8 +30,8 @@ it('replays an unavailable shell call with only business-reader schemas and unch
   const host = await startEmployee(disposers, 'employee-fixture', 'http://127.0.0.1:1',
     undefined, fixtureFile, process.platform === 'linux', authority)
   const employee = authority === undefined ? undefined : await sharedLogin(host.origin, authority.ticket('teacher@example.test'))
-  const created = employee === undefined ? await host.rpc('session/create', { request: {} })
-    : { ok: true, value: await (await employee.raw('/employee/session/create')).json() as unknown }
+  // The recording exercises the dedicated Host persona, not an employee-owned turn.
+  const created = await host.rpc('session/create', { request: {} })
   expect(created).toMatchObject({ ok: true, value: { agentPreset: 'employee-readonly' } })
   const id = (created.value as { sessionId: string }).sessionId
   expect(await host.rpc('session/prompt', { request: {
@@ -42,8 +42,17 @@ it('replays an unavailable shell call with only business-reader schemas and unch
   }, { timeout: 30000 })
   const raw = await logs(host.home)
   if (authority !== undefined && employee !== undefined) {
+    const owned = await (await employee.raw('/employee/session/create')).json() as { sessionId: string }
+    const endedBefore = raw.split('"turn/end"').length
+    expect(await host.rpc('session/prompt', { request: {
+      sessionId: owned.sessionId, requestId: 'unbound-employee-snapshot', mode: 'queue', content: user.data.content,
+    } })).toMatchObject({ ok: true })
+    await vi.waitFor(async () => {
+      expect((await logs(host.home)).split('"turn/end"').length).toBeGreaterThan(endedBefore)
+    }, { timeout: 30000 })
+    expect((await logs(host.home)).split('"step/start"').length).toBe(raw.split('"step/start"').length)
     const other = await sharedLogin(host.origin, authority.ticket('finance@example.test'))
-    expect((await other.raw('/employee/session/page', { sessionId: id, throughSeq: -1 })).status).toBe(404)
+    expect((await other.raw('/employee/session/page', { sessionId: owned.sessionId, throughSeq: -1 })).status).toBe(404)
     expect(await (await other.raw('/employee/session/list')).json()).toEqual({ items: [] })
     expect(raw).not.toContain(employee.cookie.split('=')[1])
     expect(raw).not.toContain('teacher@example.test')

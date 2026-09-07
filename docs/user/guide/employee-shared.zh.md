@@ -21,7 +21,7 @@ DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.expected.config.ts app
 DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-readonly.snapshot.ts
 ```
 
-会话回放测试由可信 Host 测试驱动写入已有转录，再检查账号所属历史的访问权限。员工不能调用该驱动使用的提示接口。身份和登录凭据均不进入模型转录；此叠加配置不改变模型提示、工具 schema 或事件契约。
+会话回放测试使用可信 Host 测试驱动，在独立的无员工归属会话中回放专用只读角色。测试还向员工所属会话提交相同输入，验证没有启动模型步骤。员工不能调用 Host 提示接口。身份和登录凭据均不进入模型转录；此叠加配置不改变模型提示、工具 schema 或事件契约。
 
 ## 身份与会话归属
 
@@ -32,6 +32,8 @@ DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.sn
 单账号模式提供应用层账号区分，不提供操作系统隔离：以同一 UID 运行的不受限进程可以访问相同的私有文件。不得向员工开放 shell、任意文件访问、配置编辑或 Host 凭据。此选项不授权员工 Agent 执行或业务写入。
 
 [会话 API](../../../packages/api/session-controller/src/employee-access.ts)分配随机会话编号，在创建前发布不可变的归属记录，并在确认成功前持久化该会话。归属文件保存在模型日志之外的私有规范化目录。创建失败可能留下归属预留记录；列表只返回实际存在且属于当前账号的会话。没有归属的旧会话会被拒绝，不会分配给下一位访问者。
+
+即使通过可信 Host API 提交，预览也会阻止员工所属 Agent 步骤和模型请求。不可被允许规则覆盖的工具检查还会拒绝员工所属及无 Agent 身份的工具调用。启动时先加载有数量上限的归属索引，再挂载路由；新预留在异步发布前进入索引。操作者不得在服务运行时编辑归属文件。无员工归属的 Host 会话保留现有执行策略，员工 Cookie 不能访问这些会话。已认证读取使用专用读取接口，不经过 Agent 工具运行时。
 
 | 接口 | 允许的行为 |
 |---|---|

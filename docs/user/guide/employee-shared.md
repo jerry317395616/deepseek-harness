@@ -21,7 +21,7 @@ DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.expected.config.ts app
 DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-readonly.snapshot.ts
 ```
 
-The recorded-session test uses a trusted Host test driver to seed the existing transcript, then checks account-owned history access. Employees cannot invoke that driver's prompt endpoint. Neither identity nor login credentials enter the model transcript; this overlay changes no model prompt, schema or event contract.
+The recorded-session test uses a trusted Host test driver with a separate unowned session to replay the dedicated read-only persona. It also submits the same input to an employee-owned session and verifies that no model step starts. Employees cannot invoke the Host prompt endpoint. Neither identity nor login credentials enter the model transcript; this overlay changes no model prompt, schema or event contract.
 
 ## Identity and session ownership
 
@@ -32,6 +32,8 @@ The authority accepts only its configured runtime's kernel UID over a private Un
 Single-user mode is application-level account separation, not OS isolation: any unrestricted process running as that UID can access the same private files. Do not give employees shell, arbitrary file access, configuration editing or Host credentials. This option does not authorize employee Agent execution or business writes.
 
 The [session API](../../../packages/api/session-controller/src/employee-access.ts) assigns a random session ID, publishes an immutable owner record before creation, and materializes that exact session before acknowledging it. Owner files live in a private canonical directory outside model logs. A failed creation can leave an owner reservation; listings return only existing owned sessions. Legacy sessions without ownership are denied rather than assigned to the next caller.
+
+The preview blocks employee-owned Agent steps and model requests even when submitted through the trusted Host API. Its monotonic tool guard also denies employee-owned and actorless tool calls. Startup loads the bounded ownership index before mounting routes; new reservations enter the index before asynchronous publication. Operators must not edit ownership files while the service runs. Unowned Host sessions retain their existing execution policy; employee cookies cannot access them. Authenticated reads use the dedicated read endpoint, not the Agent tool runtime.
 
 | Endpoint | Admitted behavior |
 |---|---|

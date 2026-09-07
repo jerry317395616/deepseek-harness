@@ -1,7 +1,7 @@
 /** Two accounts against one real dsh Web process; no live Frappe records or model calls. */
 import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocket from 'ws'
 import { disposeEmployeeFixtures, logs, startEmployee } from './harness.ts'
 import { sharedLogin, sharedRequest, startSharedAuthority } from './shared.ts'
@@ -26,6 +26,16 @@ describe.skipIf(process.platform !== 'linux')('single Harness account-owned sess
     const aId = (await left.json() as { sessionId: string }).sessionId
     const bId = (await right.json() as { sessionId: string }).sessionId
     expect(aId).not.toBe(bId)
+    expect(await host.rpc('session/prompt', { request: {
+      sessionId: aId, requestId: 'unbound-host-prompt', mode: 'queue', content: [{ type: 'text', text: 'List students.' }],
+    } })).toMatchObject({ ok: true })
+    await vi.waitFor(async () => {
+      expect(await logs(host.home), host.safeLog()).toContain('"turn/end"')
+    }, { timeout: 30000 })
+    const deniedTurn = await logs(host.home)
+    expect(deniedTurn).not.toContain('"step/start"')
+    expect(deniedTurn).not.toContain('"tool/call"')
+    expect(deniedTurn).not.toContain('"assistant/message"')
     const listing: unknown = await (await a.raw('/employee/session/list')).json()
     expect(listing).toMatchObject({ items: [{ sessionId: aId }] })
     expect(JSON.stringify(listing)).not.toContain(bId)
@@ -94,6 +104,14 @@ describe.skipIf(process.platform !== 'linux')('single Harness account-owned sess
     expect(await (await again.raw('/employee/session/list')).json()).toMatchObject({ items: [{ sessionId: aId }] })
     expect((await again.raw('/employee/session/page', { sessionId: bId, throughSeq: -1 })).status).toBe(404)
     expect((await again.raw(readPath, { sessionId: aId, ...query })).status).toBe(200)
+    const endedBefore = (await logs(restarted.home)).split('"turn/end"').length
+    expect(await restarted.rpc('session/prompt', { request: {
+      sessionId: aId, requestId: 'unbound-after-restart', mode: 'queue', content: [{ type: 'text', text: 'List students.' }],
+    } })).toMatchObject({ ok: true })
+    await vi.waitFor(async () => {
+      expect((await logs(restarted.home)).split('"turn/end"').length).toBeGreaterThan(endedBefore)
+    }, { timeout: 30000 })
+    expect(await logs(restarted.home)).not.toContain('"step/start"')
     await again.raw('/employee/logout')
     expect((await again.raw('/employee/session/list')).status).toBe(401)
     expect((await again.raw(readPath, { sessionId: aId, ...query })).status).toBe(401)

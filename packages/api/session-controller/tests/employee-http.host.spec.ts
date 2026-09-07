@@ -5,7 +5,12 @@ import { once } from 'node:events'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import type { Context } from '@deepseek-ai/cordis'
+import { Context } from '@deepseek-ai/cordis'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { WebRoute } from '@deepseek-ai/dsh-host-webserver'
 import type { SessionSummary } from '../src/types.ts'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -20,6 +25,10 @@ const cookie = '__Host-dsh-shared=' + 'A'.repeat(43)
 async function fixture(overrides: Partial<Config> = {}) {
   const root = await mkdtemp(join(tmpdir(), 'dsh-http-id-'))
   disposers.push(() => rm(root, { recursive: true, force: true }))
+  const policy = new Context()
+  disposers.push(() => policy.fiber.dispose())
+  await policy.plugin(SystemPrompt, {})
+  await policy.plugin(ToolRuntime)
   let admitted = true
   let reply: string | undefined
   const ipc = netServer({ allowHalfOpen: true }, (socket) => {
@@ -48,6 +57,8 @@ async function fixture(overrides: Partial<Config> = {}) {
   let blocked: { entered: () => void; wait: Promise<void> } | undefined
   const rows: SessionSummary[] = []
   const ctx = {
+    on: policy.on.bind(policy),
+    tools: policy.tools,
     webServer: { register(value: WebRoute) { route = value; return () => { route = undefined } } },
     sessionController: {
       async create(value: { sessionId: SessionSummary['sessionId'] }) {
@@ -69,7 +80,11 @@ async function fixture(overrides: Partial<Config> = {}) {
     },
     sessions: { get() { return missingSession ? undefined : {} } },
     sessionPersistence: { async ensureMaterialized() {} },
-    effect(factory: () => () => Promise<void>) { release = factory() },
+    effect(factory: () => () => Promise<void> | void) {
+      const dispose = factory()
+      const previous = release
+      release = async () => { await dispose(); await previous?.() }
+    },
   } as unknown as Context
   const config: Config = { publicOrigin, identitySocketPath: socketPath, ownersDirectory: join(root, 'owners'),
     timeoutMs: 5000, maxRequests: 8, maxOwnershipEntries: 100, maxResponseBytes: 4096, ...overrides }
@@ -105,7 +120,7 @@ async function fixture(overrides: Partial<Config> = {}) {
     })
   }
   const registered = route
-  return { call, socketPath, rows, abortedRead, setReply(value: string) { reply = value },
+  return { call, socketPath, rows, abortedRead, policy, setReply(value: string) { reply = value },
     setMissing() { missingSession = true },
     async release() { await release?.() },
     reviveStaleRoute() { route = registered },
@@ -122,6 +137,27 @@ async function fixture(overrides: Partial<Config> = {}) {
 }
 
 describe.skipIf(process.platform !== 'linux')('shared HTTP preview', () => {
+  it('denies direct employee and actorless tool execution even after an allow listener, and disposes its guard', async () => {
+    const f = await fixture()
+    const created = await f.call('/employee/session/create', '{}')
+    const { sessionId } = JSON.parse(created.text) as { sessionId: SessionId }
+    let calls = 0
+    f.policy.tools.register({ name: 'probe', description: 'test', parameters: {},
+      output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value as string }] },
+      execute: async () => { calls++; return 'executed' },
+    })
+    f.policy.on('tools/pre-execute', () => Promise.resolve({ kind: 'allow' }), { prepend: true })
+    const agent = { id: sessionId, session: { id: sessionId } } as Agent
+    const execute = (actor?: Agent) => f.policy.tools.execute({ callId: ToolCallId('probe'), name: 'probe',
+      arguments: {}, signal: new AbortController().signal, ...(actor === undefined ? {} : { agent: actor }) })
+    expect(JSON.stringify(await execute(agent))).toContain('Employee Agent execution is unavailable.')
+    expect(JSON.stringify(await execute())).toContain('Employee Agent execution is unavailable.')
+    expect(calls).toBe(0)
+    await f.release()
+    expect(JSON.stringify(await execute(agent))).toContain('executed')
+    expect(calls).toBe(1)
+  })
+
   it('serves only explicit owned session routes and removes its registration on disposal', async () => {
     const f = await fixture()
     const login = await f.call('/employee/sso?token=synthetic')

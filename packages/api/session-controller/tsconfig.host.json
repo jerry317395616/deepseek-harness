@@ -27,6 +27,7 @@
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
     { "path": "../../core/agent" },
+    { "path": "../../core/tools" },
     { "path": "../../host/webserver" },
     { "path": "../../core/agent-default-model" },
     { "path": "../../core/scope" },

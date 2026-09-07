@@ -22,6 +22,7 @@ export function sameEmployee(left: EmployeePrincipal, right: EmployeePrincipal):
 
 /** Append-only ownership store. Missing legacy ownership never grants access. */
 export class EmployeeOwners {
+  private readonly reserved = new Set<string>()
   /**
    * @param directory - private canonical directory reserved for ownership records.
    * @param scanLimit - maximum records scanned before denying a list operation.
@@ -35,6 +36,23 @@ export class EmployeeOwners {
     const info = await stat(this.directory)
     if (await realpath(this.directory) !== this.directory || !info.isDirectory()
       || info.uid !== process.getuid?.() || (info.mode & 0o077) !== 0) throw new EmployeeAccessError(503)
+    let count = 0
+    for await (const entry of await opendir(this.directory)) {
+      if (!entry.name.endsWith('.json')) continue
+      if (++count > this.scanLimit) throw new EmployeeAccessError(503)
+      const row = await this.readPath(join(this.directory, entry.name))
+      if (row !== undefined) this.reserved.add(row.sessionId)
+    }
+  }
+
+  /**
+   * Identify employee sessions before executing an Agent or tool, including failed reservations.
+   * The deployment must not edit ownership files while this store is active.
+   * @param sessionId - session belonging to the execution, not an actor supplied in tool arguments.
+   * @returns whether the session lacks an admitted employee execution path.
+   */
+  blocksExecution(sessionId: SessionId): boolean {
+    return this.reserved.has(sessionId)
   }
 
   private path(sessionId: string): string {
@@ -48,6 +66,8 @@ export class EmployeeOwners {
    * @returns after durable atomic publication; rejects on any existing owner.
    */
   async reserve(sessionId: SessionId, principal: EmployeePrincipal): Promise<void> {
+    if (!this.reserved.has(sessionId) && this.reserved.size >= this.scanLimit) throw new EmployeeAccessError(503)
+    this.reserved.add(sessionId)
     const temporary = join(this.directory, '.' + randomUUID() + '.tmp')
     const handle = await open(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL, 0o600)
     try {

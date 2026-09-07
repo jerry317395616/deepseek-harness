@@ -8,6 +8,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { Context } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-host-webserver'
+import type {} from '@deepseek-ai/dsh-tools'
 import schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
 import type { SessionController } from './index.ts'
@@ -17,7 +18,7 @@ import { EmployeeOwners, sameEmployee } from './employee-owners.ts'
 /** Stable plugin name for the opt-in shared session API. */
 export const name = 'employee-session-access'
 /** Core services required by the shared session API. */
-export const inject = ['webServer', 'sessionController', 'sessions', 'sessionPersistence']
+export const inject = ['webServer', 'sessionController', 'sessions', 'sessionPersistence', 'tools']
 
 /** Explicit deployment settings; this API has no production-default profile. */
 export interface Config {
@@ -177,6 +178,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   const owners = new EmployeeOwners(config.ownersDirectory, config.maxOwnershipEntries)
   await owners.initialize()
+  // Host credentials do not bind a Frappe actor to queued employee work.
+  ctx.on('agent/pre-step', ({ agent }, next) => owners.blocksExecution(agent.session.id)
+    ? Promise.resolve({ kind: 'reject' as const }) : next())
+  ctx.on('agent/request', ({ agent }, next) => {
+    if (owners.blocksExecution(agent.session.id)) throw new EmployeeAccessError(401)
+    return next()
+  })
+  ctx.effect(() => ctx.tools.guard(execution => execution.agent === undefined
+    || owners.blocksExecution(execution.agent.session.id)
+    ? 'Employee Agent execution is unavailable.' : undefined))
   const identity = new EmployeeIdentity(config.identitySocketPath, config.timeoutMs)
   const access = new EmployeeSessionAccess(ctx.sessionController, owners, identity, async (sessionId) => {
     const session = ctx.sessions.get(sessionId)
