@@ -49,6 +49,10 @@ it('replays an unavailable shell call with only business-reader schemas and unch
   expect(raw).toContain('unknown tool')
   expect(raw).toContain('Employee scope test completed.')
   await expect(access(join(host.root, 'employee-escape-marker'))).rejects.toThrow()
+  if (host.logout !== undefined) {
+    await host.logout()
+    expect((await host.raw('session/list', { _request: {} })).status).toBe(401)
+  }
   for (const [path, content] of artifacts) {
     if (mode === 'refresh') await writeFile(path, content)
     else expect(content, path).toBe(await readFile(path, 'utf8'))

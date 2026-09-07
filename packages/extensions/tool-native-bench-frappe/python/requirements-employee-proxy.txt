@@ -1,0 +1,2 @@
+# Optional transport process only; do not install into the production Bench environment.
+aiohttp==3.14.3

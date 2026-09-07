@@ -12,7 +12,7 @@ The deployed Frappe launcher signs the employee identity, but a shared Harness l
 
 The [employee gateway helper](../../../../packages/extensions/tool-native-bench-frappe/python/employee_gateway.py) routes a verified identity to a deployment-owned, single-employee upstream. It cannot select a fallback maintenance host, create runtimes or change Frappe records. Distinct private homes and launch credentials are required configuration, not a claim of operating-system isolation.
 
-Login and replay state are bounded and process-local. A ticket is accepted once under a lock and must be issued after startup, so a restart invalidates earlier tickets and cookies without a new database schema. The proxy must authorize each HTTP request and WebSocket upgrade; existing streams require separate revocation.
+Login and replay state are bounded and process-local. A ticket is accepted once under a lock and must be issued after startup, so a restart invalidates earlier tickets and cookies without a new database schema. The optional traffic proxy authorizes each HTTP request and WebSocket upgrade, rechecks before releasing response data or relaying a data message, and monitors idle streams. Its account verifier invokes the existing Native Bench renewer in check-only mode. Logout, expiry and a failed identity check close both stream ends; shutdown awaits owned tasks.
 
 ## Alternatives considered
 
@@ -24,6 +24,6 @@ Login and replay state are bounded and process-local. A ticket is accepted once 
 
 ## Consequences
 
-The source supplies and tests a routing component, not a deployed multi-user service. Production admission still requires isolated profiles, a verified proxy, Frappe assertion issuance/renewal, disabled maintenance capabilities and active-stream revocation. The [package README](../../../../packages/extensions/tool-native-bench-frappe/README.md#employee-login-routing-helper) owns the operating requirements.
+The source supplies and tests a routing component, not a deployed multi-user service. Production admission still requires isolated profiles, a verified deployment of the proxy, Frappe assertion issuance/renewal and disabled maintenance capabilities. The proxy uses aiohttp for framing and transport ownership rather than a custom WebSocket implementation. Revocation has explicit check/close deadlines and cannot undo accepted work. The [package README](../../../../packages/extensions/tool-native-bench-frappe/README.md#employee-login-routing-helper) owns the operating requirements.
 
-The credential-free suite checks two identities through HTTP, concurrent replay, expiry, restart, logout and invalid bindings. The [recorded business denial](../../../../snapshots/session/native-frappe-business-denial/session.jsonl) verifies that a model cannot use the business reader to enumerate User records or apply updates; it does not test production login.
+The credential-free suite checks two identities through HTTP, concurrent replay, expiry, restart, logout and invalid bindings. The [recorded business denial](../../../../snapshots/session/native-frappe-business-denial/session.jsonl) verifies that a model cannot use the business reader to enumerate User records or apply updates; it does not test production login. The proxy transport suite covers bidirectional and idle revocation, in-flight HTTP rejection and cleanup. An opt-in fixture runs the real employee Web processes and recorded session through synthetic SSO identities; production Frappe handoff, TLS and load behavior remain unverified.

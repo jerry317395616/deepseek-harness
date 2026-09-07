@@ -30,6 +30,8 @@
     "lib/invariant.js",
     "python/native_frappe_query.py",
     "python/employee_gateway.py",
+    "python/employee_proxy.py",
+    "python/requirements-employee-proxy.txt",
     "python/native_actor_refresh.py",
     "lib/types/**/*.d.ts"
   ],

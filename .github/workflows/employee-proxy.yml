@@ -1,0 +1,52 @@
+name: Employee proxy
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/employee-proxy.yml'
+      - 'packages/extensions/tool-native-bench-frappe/**'
+      - 'apps/cli/tests/profiles/employee-readonly/**'
+      - 'apps/web/tests/employee-readonly.snapshot.ts'
+      - 'snapshots/web/employee-readonly/**'
+  push:
+    branches: [master]
+    paths:
+      - '.github/workflows/employee-proxy.yml'
+      - 'packages/extensions/tool-native-bench-frappe/**'
+      - 'apps/cli/tests/profiles/employee-readonly/**'
+      - 'apps/web/tests/employee-readonly.snapshot.ts'
+      - 'snapshots/web/employee-readonly/**'
+permissions:
+  contents: read
+jobs:
+  transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      DSH_TELEMETRY_DISABLED: '1'
+      DSH_EXAMPLE_MODE: lib
+      DSH_SNAPSHOT: replay
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6.3.0
+        with:
+          python-version: '3.14'
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Isolate proxy dependencies
+        run: |
+          proxy_venv=$(mktemp -d "$RUNNER_TEMP/employee-proxy-XXXXXX")
+          python -m venv "$proxy_venv"
+          "$proxy_venv/bin/python" -m pip install -r packages/extensions/tool-native-bench-frappe/python/requirements-employee-proxy.txt
+          echo "DSH_EMPLOYEE_PROXY_PYTHON=$proxy_venv/bin/python" >> "$GITHUB_ENV"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - name: Verify transport revocation
+        run: "$DSH_EMPLOYEE_PROXY_PYTHON -B -m unittest discover -s packages/extensions/tool-native-bench-frappe/tests -p test_employee_proxy.py -v"
+      - name: Verify isolated Web hosts
+        run: pnpm exec vitest run --config vitest.expected.config.ts apps/cli/tests/profiles/employee-readonly/employee-readonly.expected.e2e.ts
+      - name: Replay employee session through proxy
+        run: pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-readonly.snapshot.ts

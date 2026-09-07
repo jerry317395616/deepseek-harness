@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { execa } from 'execa'
+import { wrapEmployeeProxy } from './proxy.ts'
 import { expect, vi } from 'vitest'
 import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
 
@@ -106,15 +107,18 @@ export async function startEmployee(
     if (url === undefined) throw new Error(`employee not ready (exited=${String(settled)}): ${safeLog()}`)
   }, { timeout: 30000 })
   if (url === undefined) throw new Error('employee URL missing')
-  const origin = new URL(url).origin
+  let origin = new URL(url).origin
   const exchange = await fetch(url, { redirect: 'manual' })
-  const cookie = exchange.headers.get('set-cookie')?.split(';', 1)[0]
+  let cookie = exchange.headers.get('set-cookie')?.split(';', 1)[0]
   if (cookie === undefined) throw new Error('employee browser credential exchange failed')
   const html = await (await fetch(origin, { headers: { cookie } })).text()
   expect(html).toContain('__DSH_BOOT__')
+  const proxy = await wrapEmployeeProxy(disposers, origin, cookie, url)
+  const headers = proxy?.headers ?? {}
+  if (proxy !== undefined) { origin = proxy.origin; cookie = proxy.cookie }
   async function raw(method: string, args: object = {}, otherCookie = cookie) {
     return fetch(`${origin}/api/${method}`, {
-      method: 'POST', headers: { cookie: otherCookie ?? '', 'content-type': 'application/json' },
+      method: 'POST', headers: { ...headers, cookie: otherCookie ?? '', 'content-type': 'application/json' },
       body: JSON.stringify({ type: 'client-request', rpcId: 'employee-fixture', method, payload: { args } }),
     })
   }
@@ -123,7 +127,7 @@ export async function startEmployee(
     expect(response.status, method).toBe(200)
     return (await response.json() as RpcReply).result
   }
-  return { root, home, origin, cookie, raw, rpc, stop, safeLog }
+  return { root, home, origin, cookie, headers, logout: proxy?.logout, raw, rpc, stop, safeLog }
 }
 
 export async function logs(home: string): Promise<string> {

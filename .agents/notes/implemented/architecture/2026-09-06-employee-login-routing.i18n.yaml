@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-06-employee-login-routing.md
-2026-09-06-employee-login-routing.md: 787d15c21d0a7640198d4e854a0a60403ed8589e
-2026-09-06-employee-login-routing.zh.md: fc551e6eca752fd2f12013bb232277ffbf4ff973
+2026-09-06-employee-login-routing.md: d661db28a44fc390f12dec2831b08b9ddd95c1a6
+2026-09-06-employee-login-routing.zh.md: 8ea5daa72587b1137c0cd77ba2c4235ed95a2e37

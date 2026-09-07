@@ -79,7 +79,11 @@ kind: "package-reference"
 
 反向代理必须将 `GET /auth` 设为内部接口，并且对**每个 HTTP 请求和 WebSocket 升级请求**，只使用该接口验证后返回的 `X-Harness-Upstream` 选择后端。`GET /sso?token=…` 将交接票据换成带 Secure、HttpOnly 属性的主机 Cookie，并跳转到对应员工的启动地址。同源 `POST /logout` 删除该登录会话。辅助程序不记录请求日志，并返回 no-store/no-referrer 响应头；部署代理也必须省略包含凭据的查询字符串。它不转发业务流量，也不保护被直接访问的运行时端口。
 
-实例配置与线上代理接入属于独立的部署工作。私有主目录和路由不是操作系统沙箱：开放员工访问前，必须审查运行时插件、文件系统、设置 API 和身份断言续期。退出不会撤销已建立的 WebSocket 流；部署方必须在撤销权限时关闭这些连接。[无真实凭据的 HTTP 测试](tests/test_employee_gateway.py)验证分流和拒绝逻辑，不代表生产代理或员工配置方案已通过验证。
+可选的[流量代理](python/employee_proxy.py)负责 HTTP 转发和活动 WebSocket 撤销。其独立私有配置只接受 `gateway_config`、`python`、`identity_configs`、`recheck_seconds` 和 `check_seconds`。`gateway_config` 指向上述分流配置；`python` 是 Bench 解释器的绝对路径；`identity_configs` 为每个绑定员工指定已有的私有续期配置，用户名与站点必须匹配该绑定。两个时间参数必须明确指定为正数秒，最大 30 秒。代理在装有[固定版本传输依赖](python/requirements-employee-proxy.txt)的独立 Python 环境运行，仅在执行可信续期程序的只读 `--check` 操作时调用 Bench 解释器。
+
+代理在转发请求和返回 HTTP 数据之前、转发每条 WebSocket 数据消息之前，以及连接空闲时检查身份。退出、会话过期、账号停用或身份检查依赖失败会关闭连接两端；空闲连接的检测上限为复查间隔加检查超时，之后的关闭握手最多两秒。代理拒绝跨源写请求和 WebSocket 升级，隐藏 `/auth`，不接受调用方指定后端。HTTP 请求体上限为 1 MiB，响应体上限为 16 MiB；WebSocket 消息上限为 1 MiB。TLS 终止、禁止直接访问运行时端口、私有配置及代理日志脱敏仍由部署方负责。
+
+[传输测试](tests/test_employee_proxy.py)覆盖撤销和清理。将 `DSH_EMPLOYEE_PROXY_PYTHON` 指向独立解释器后，[员工 Web 测试夹具](../../../apps/cli/tests/profiles/employee-readonly/proxy.ts)会通过临时代理身份驱动真实 Web 主机和已有会话回放。这是不使用真实凭据的传输验证，不代表线上 Frappe 单点登录或浏览器验收通过。断开客户端不会取消或回滚 Harness 已接受的工作。实例配置、线上单点登录接入和生产负载测试仍属于独立的部署工作。
 
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench 身份断言续期

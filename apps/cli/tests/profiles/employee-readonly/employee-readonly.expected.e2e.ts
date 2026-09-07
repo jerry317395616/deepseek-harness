@@ -47,7 +47,7 @@ describe('employee readonly Web profile', () => {
     })).toMatchObject({ ok: false, error: { code: 'session/not-found' } })
 
     const socket = new WebSocket(a.origin.replace('http:', 'ws:') + '/api/remote.mux',
-      { headers: { cookie: a.cookie } })
+      { headers: { ...a.headers, cookie: a.cookie } })
     disposers.push(async () => {
       if (socket.readyState === WebSocket.CLOSED) return
       const closed = once(socket, 'close')
@@ -87,6 +87,13 @@ describe('employee readonly Web profile', () => {
     expect(saved).toContain('Employee scope test completed.')
     await expect(access(join(a.root, 'employee-escape-marker'))).rejects.toThrow()
     expect(await b.rpc('session/list', { _request: {} })).toEqual({ ok: true, value: { items: [] } })
+    if (a.logout !== undefined) {
+      const closed = once(socket, 'close')
+      await a.logout()
+      await closed
+      expect((await a.raw('session/list', { _request: {} })).status).toBe(401)
+      expect(await b.rpc('session/list', { _request: {} })).toEqual({ ok: true, value: { items: [] } })
+    }
     // A new process must reconstruct the same preset and transcript, not another Host's directory.
     await a.stop()
     const resumed = await startEmployee('employee-a', provider.baseURL, a.root)
