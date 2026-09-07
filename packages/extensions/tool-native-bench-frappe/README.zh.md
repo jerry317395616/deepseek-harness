@@ -85,6 +85,8 @@ kind: "package-reference"
 
 [传输测试](tests/test_employee_proxy.py)覆盖撤销和清理。将 `DSH_EMPLOYEE_PROXY_PYTHON` 指向独立解释器后，[员工 Web 测试夹具](../../../apps/cli/tests/profiles/employee-readonly/proxy.ts)会通过临时代理身份驱动真实 Web 主机和已有会话回放。这是不使用真实凭据的传输验证，不代表线上 Frappe 单点登录或浏览器验收通过。断开客户端不会取消或回滚 Harness 已接受的工作。实例配置、线上单点登录接入和生产负载测试仍属于独立的部署工作。
 
+限定站点的[线上验收程序](../../../scripts/employee-live-acceptance.py)默认只读预览。在指定 Native Bench 上，经授权的操作者核对预览后，可使用 `--run --expected-students N` 执行。它仅接受已有的两个停用测试账号，要求角色完全匹配且班级权限名单未变化，串行执行验收，临时启用账号，并通过 Frappe 密码服务重设测试密码。程序使用真实 HTTPS 登录、Frappe 签名交接票据、独立 Web 配置方案和本机脚本模型，验证记录权限与活动连接撤销。清理时停用账号并清除会话，核对业务记录及权限指纹，并在所属进程停止后删除私有运行目录。主机突然故障或 SIGKILL 可能阻止清理；操作者随后必须通过 Frappe 停用指定测试账号并清除会话。程序需要已构建的 Harness、Bench 解释器及单独安装的代理依赖；不修改正式路由，也不认证公网 TLS、浏览器 Cookie 行为、财务计算或针对恶意本机进程的隔离。
+
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench 身份断言续期
 

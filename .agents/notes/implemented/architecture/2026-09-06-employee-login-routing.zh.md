@@ -26,4 +26,4 @@ Status: implemented
 
 源码提供并测试的是分流组件，不是已部署的多用户服务。生产开放仍要求隔离的配置方案、经过验证的代理部署、Frappe 身份断言签发与续期以及禁用维护能力。代理使用 aiohttp 管理帧和传输，不自行实现 WebSocket。撤销有明确的检查和关闭时限，不能撤回已经接受的工作。[包 README](../../../../packages/extensions/tool-native-bench-frappe/README.zh.md#employee-login-routing-helper)定义运行要求。
 
-无真实凭据的测试套件通过 HTTP 验证两个身份、并发重放、过期、重启、退出和无效绑定。[业务拒绝会话记录](../../../../snapshots/session/native-frappe-business-denial/session.jsonl)验证模型无法通过业务读取器枚举 User 记录或执行修改；它不测试生产登录。代理传输测试覆盖双向及空闲连接撤销、进行中的 HTTP 请求拒绝和清理。可选夹具通过合成单点登录身份运行真实员工 Web 进程和会话回放；生产 Frappe 交接、TLS 和负载行为尚未验证。
+无真实凭据的测试套件通过 HTTP 验证两个身份、并发重放、过期、重启、退出和无效绑定。[业务拒绝会话记录](../../../../snapshots/session/native-frappe-business-denial/session.jsonl)验证模型无法通过业务读取器枚举 User 记录或执行修改；它不测试生产登录。代理传输测试覆盖双向及空闲连接撤销、进行中的 HTTP 请求拒绝和清理。可选夹具通过合成单点登录身份运行真实员工 Web 进程和会话回放。限定站点的[线上验收程序](../../../../scripts/employee-live-acceptance.py)还通过独立临时主机验证真实 Frappe 交接签名、双账号工具权限、防重放、跨主机会话拒绝以及退出和停用撤销。本机脚本模型确保记录结果不发送到外部提供者。严格的停用账号及名单准入与独占锁将运行写入限定为经授权的测试账号；清理核对账号、会话、业务记录和权限。公网路由、浏览器及 TLS 行为和生产负载仍须单独验收。
