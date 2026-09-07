@@ -23,7 +23,9 @@ it('replays an unavailable shell call with only business-reader schemas and unch
   const fixture = await readFile(fixtureFile, 'utf8')
   const user = parseSessionLog(fixture).find(event => event.type === 'user/message')
   if (user?.type !== 'user/message') throw new Error('employee fixture lacks a user message')
-  const host = await startEmployee(disposers, 'employee-fixture', 'http://127.0.0.1:1', undefined, fixtureFile)
+  // Linux exercises the credential-free preset; socket reads have real-transport package tests.
+  const host = await startEmployee(disposers, 'employee-fixture', 'http://127.0.0.1:1',
+    undefined, fixtureFile, process.platform === 'linux')
   const created = await host.rpc('session/create', { request: {} })
   expect(created).toMatchObject({ ok: true, value: { agentPreset: 'employee-readonly' } })
   const id = (created.value as { sessionId: string }).sessionId

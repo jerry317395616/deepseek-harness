@@ -1,5 +1,6 @@
 /** Native Frappe transport for bounded Bench discovery, reads, and approved updates. */
 
+import { readEmployeeBroker } from './broker.ts'
 import { fileURLToPath } from 'node:url'
 import { isAbsolute, join, resolve } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -29,6 +30,8 @@ export interface NativeFrappeSpec {
   frappeUser: string
   accessMode: 'maintenance' | 'business'
   actorTokenFile: string
+  brokerSocketPath: string
+  timeoutMs: number
   businessDoctypes: string[]
   maxOutputBytes: number
   maxInputBytes: number
@@ -47,6 +50,8 @@ export function resolveNativeFrappeSpec(config: {
   frappeUser?: string
   accessMode?: string
   actorTokenFile?: string
+  brokerSocketPath?: string
+  timeoutMs?: number
   businessDoctypes?: string[]
   maxOutputBytes?: number
   maxInputBytes?: number
@@ -64,8 +69,13 @@ export function resolveNativeFrappeSpec(config: {
   const pythonExecutable = executableInput === undefined || executableInput === ''
     ? join(benchRoot, 'env', 'bin', 'python')
     : isAbsolute(executableInput) ? executableInput : resolve(benchRoot, executableInput)
-  const frappeUser = config.frappeUser?.trim() || 'Administrator'
-  if (frappeUser === '' || frappeUser.length > 254 || /[\r\n]/u.test(frappeUser)) {
+  const brokerSocketPath = config.brokerSocketPath?.trim() ?? ''
+  if (brokerSocketPath !== '' && (process.platform !== 'linux' || !isAbsolute(brokerSocketPath)
+    || Buffer.byteLength(brokerSocketPath) > 107 || /[\u0000\r\n]/u.test(brokerSocketPath))) {
+    throw new Error('native-bench-frappe: broker requires a Linux absolute Unix socket path')
+  }
+  const frappeUser = config.frappeUser?.trim() || (brokerSocketPath === '' ? 'Administrator' : '')
+  if ((frappeUser === '' && brokerSocketPath === '') || frappeUser.length > 254 || /[\r\n]/u.test(frappeUser)) {
     throw new Error('native-bench-frappe: frappeUser must be a single account name')
   }
   const accessMode = config.accessMode ?? 'maintenance'
@@ -74,11 +84,14 @@ export function resolveNativeFrappeSpec(config: {
   }
   const actorTokenFile = config.actorTokenFile?.trim() ?? ''
   const businessDoctypes = [...new Set(config.businessDoctypes ?? [])]
+  if (brokerSocketPath !== '' && (accessMode !== 'business' || actorTokenFile !== '' || frappeUser !== '')) {
+    throw new Error('native-bench-frappe: broker requires business mode without caller identity or assertion files')
+  }
   if (accessMode === 'business') {
-    if (!config.frappeUser?.trim() || frappeUser === 'Guest') {
+    if (brokerSocketPath === '' && (!config.frappeUser?.trim() || frappeUser === 'Guest')) {
       throw new Error('native-bench-frappe: business mode requires an explicit expected Frappe user')
     }
-    if (!isAbsolute(actorTokenFile) || /[\u0000\r\n]/u.test(actorTokenFile)) {
+    if (brokerSocketPath === '' && (!isAbsolute(actorTokenFile) || /[\u0000\r\n]/u.test(actorTokenFile))) {
       throw new Error('native-bench-frappe: business mode requires an absolute private actor token file')
     }
     if (businessDoctypes.length === 0 || businessDoctypes.length > 64
@@ -97,6 +110,10 @@ export function resolveNativeFrappeSpec(config: {
   if (!Number.isInteger(maxInputBytes) || maxInputBytes < 16_384 || maxInputBytes > 1_000_000) {
     throw new Error('native-bench-frappe: maxInputBytes must be an integer from 16384 to 1000000')
   }
+  const timeoutMs = config.timeoutMs ?? 30_000
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1_000 || timeoutMs > 120_000) {
+    throw new Error('native-bench-frappe: timeoutMs must be an integer from 1000 to 120000')
+  }
   return {
     benchRoot,
     site,
@@ -105,6 +122,8 @@ export function resolveNativeFrappeSpec(config: {
     frappeUser,
     accessMode,
     actorTokenFile,
+    brokerSocketPath,
+    timeoutMs,
     businessDoctypes,
     maxOutputBytes,
     maxInputBytes,
@@ -120,11 +139,11 @@ export class NativeFrappeClient {
   ) {}
 
   /**
-   * Execute one bounded operation without a network hop, raw SQL, or Python input.
+   * Execute a bounded local read or approved update; broker mode never spawns Bench.
    * @param operation Allowlisted native Frappe operation.
    * @param arguments_ Bounded, model-supplied operation arguments.
-   * @param signal Cancellation signal for the subprocess operation.
-   * @returns Canonical JSON emitted by the local helper.
+   * @param signal Cancellation signal for the process or local-socket exchange.
+   * @returns Canonical JSON emitted by the configured helper or broker.
    */
   async call(
     operation: string,
@@ -143,7 +162,16 @@ export class NativeFrappeClient {
       }
     }
     if (signal.aborted) throw new Error('native-bench-frappe: Frappe request was cancelled')
-    const payload = JSON.stringify({ arguments: normalizeArguments(operation, arguments_) })
+    const normalized = normalizeArguments(operation, arguments_)
+    if (this.spec.brokerSocketPath !== '') {
+      return readEmployeeBroker({
+        socketPath: this.spec.brokerSocketPath,
+        timeoutMs: this.spec.timeoutMs,
+        maxInputBytes: this.spec.maxInputBytes,
+        maxOutputBytes: this.spec.maxOutputBytes,
+      }, operation, normalized, signal)
+    }
+    const payload = JSON.stringify({ arguments: normalized })
     if (Buffer.byteLength(payload, 'utf8') > this.spec.maxInputBytes) {
       throw new Error('native-bench-frappe: request arguments exceed the configured input limit')
     }

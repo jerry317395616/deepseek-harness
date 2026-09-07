@@ -45,8 +45,9 @@ An operator must provision the following values before a live evaluation. The te
 | Web profile and installed packages | Operator-owned stock base/Web layers with resolvable Native Bench Frappe and persona plugins; no employee-editable patches |
 | Private state | A separate process, workspace, `DSH_HOME`, `DSH_AGENTS_HOME`, persistence root, and browser credential for each employee |
 | `DSH_EMPLOYEE_PRESET_ROOT` | Absolute operator-owned path to this overlay's adjacent `presets` directory; no other preset roots |
-| `DSH_EMPLOYEE_BENCH_ROOT`, `DSH_EMPLOYEE_SITE` | Explicit Native Bench directory and target site |
-| `DSH_EMPLOYEE_USER`, `DSH_EMPLOYEE_ASSERTION_FILE` | Fixed Frappe user and private, short-lived signed identity assertion; maintain renewal outside the conversation |
+| `DSH_EMPLOYEE_BENCH_ROOT`, `DSH_EMPLOYEE_SITE` | Explicit Native Bench directory and target site for direct calls; unused by the socket client |
+| `DSH_EMPLOYEE_USER`, `DSH_EMPLOYEE_ASSERTION_FILE` | Direct mode only: fixed account and private short-lived assertion; unset both in broker mode |
+| `DSH_EMPLOYEE_BROKER_SOCKET` | Optional Linux absolute Unix socket path; the trusted broker binds each existing employee UID to its Frappe identity |
 | `DSH_EMPLOYEE_DOCTYPES` | JSON array of explicitly approved existing DocType names; an empty array grants no document access |
 | Model and network | Operator-controlled provider configuration, loopback binding, and an authenticated employee-to-Host proxy before remote exposure |
 
@@ -59,7 +60,7 @@ Pass the overlay with the launcher's `--patch` option before Web application fla
 
 The Gateway allows only explicitly named conversation and read-only discovery endpoints. Preset authoring and switching, configuration mutation, workspace opening, attachments, model switching, and forking are denied. The model receives no shell, filesystem, code, command, subagent, workflow, or maintenance tools. Source configuration remains trusted executable code, not a request-controlled permission setting.
 
-An expired assertion or Frappe permission denial must be reported to the operator; the assistant must not switch identity or fall back to an unrestricted interface. Keep source DocType names and Frappe authorization authoritative. This overlay creates no DocType and changes no business record or role permission.
+An expired assertion or Frappe permission denial must be reported to the operator; the assistant must not switch identity or fall back to an unrestricted interface. In [broker mode](../../../packages/extensions/tool-native-bench-frappe/README.md#employee-read-broker), the employee process does not invoke Bench or load assertion files. A missing broker fails the query without direct-call fallback. Keep source DocType names and Frappe authorization authoritative. This overlay creates no DocType and changes no business record or role permission.
 
 Separate processes and directories provide application-level separation, not an operating-system sandbox for processes sharing one Unix account. The allowed event stream covers its entire private Host. Proxy routing, employee login, active-WebSocket revocation, real-account row permissions, and model-provider data handling still need deployment acceptance. Never attach different employees to one Host and call that isolation.
 

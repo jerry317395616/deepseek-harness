@@ -25,7 +25,7 @@ interface RpcReply {
 
 export async function startEmployee(
   disposers: (() => Promise<unknown>)[], label: string, baseURL: string, existingRoot?: string,
-  replayFixture?: string,
+  replayFixture?: string, brokerMode = false,
 ) {
   const root = existingRoot ?? await mkdtemp(join(tmpdir(), 'dsh-employee-profile-'))
   if (existingRoot === undefined) disposers.push(() => rm(root, { recursive: true, force: true }))
@@ -79,8 +79,11 @@ export async function startEmployee(
     EMPLOYEE_FIXTURE_MODEL_KEY: 'synthetic-no-provider-key',
     DSH_EMPLOYEE_PRESET_ROOT: presets,
     DSH_EMPLOYEE_BENCH_ROOT: join(root, 'missing-bench'),
-    DSH_EMPLOYEE_SITE: 'example.test', DSH_EMPLOYEE_USER: label + '@example.test',
-    DSH_EMPLOYEE_ASSERTION_FILE: join(root, 'absent-assertion'),
+    DSH_EMPLOYEE_SITE: 'example.test',
+    ...(brokerMode ? { DSH_EMPLOYEE_BROKER_SOCKET: join(root, 'absent-broker.sock') } : {
+      DSH_EMPLOYEE_USER: label + '@example.test',
+      DSH_EMPLOYEE_ASSERTION_FILE: join(root, 'absent-assertion'),
+    }),
     DSH_EMPLOYEE_DOCTYPES: '["Student"]',
     NODE_NO_WARNINGS: '1',
   }

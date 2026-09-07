@@ -2762,19 +2762,21 @@ export interface Config {
   site?: string
   /** Optional Python executable; relative paths resolve under benchRoot. */
   pythonExecutable?: string
-  /** Fixed expected Frappe account; only maintenance defaults an empty value to Administrator. */
+  /** Direct-call Frappe account; maintenance defaults to Administrator and broker mode requires empty. */
   frappeUser?: string
   /** Maintenance retains approved updates; business requires a signed, pinned actor and read scope. */
   accessMode?: 'maintenance' | 'business'
-  /** Private POSIX file read only by the Frappe helper, never by model-facing tools. */
+  /** Direct business-call assertion file; broker mode requires empty and owns credentials separately. */
   actorTokenFile?: string
+  /** Linux Unix socket for broker-owned identity; requires business mode without caller credentials. */
+  brokerSocketPath?: string
   /** Explicit DocType allowlist for business reads; Frappe permissions still apply. */
   businessDoctypes?: string[]
-  /** Maximum captured helper output in bytes. */
+  /** Maximum complete helper or broker response in bytes. */
   maxOutputBytes?: number
-  /** Maximum serialized model arguments sent to the helper. */
+  /** Maximum serialized helper request or complete broker request in bytes. */
   maxInputBytes?: number
-  /** Cooperative timeout budget for one Frappe operation. */
+  /** Operation timeout budget; broker mode enforces a complete-exchange socket deadline. */
   timeoutMs: number
 }
 ```

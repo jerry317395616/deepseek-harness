@@ -6,6 +6,7 @@ on:
       - 'scripts/employee-*.py'
       - 'scripts/test_employee*.py'
       - 'packages/extensions/tool-native-bench-frappe/**'
+      - 'apps/cli/config/examples/employee-readonly/**'
       - 'apps/cli/tests/profiles/employee-readonly/**'
       - 'apps/web/tests/employee-readonly.snapshot.ts'
       - 'snapshots/web/employee-readonly/**'
@@ -16,6 +17,7 @@ on:
       - 'scripts/employee-*.py'
       - 'scripts/test_employee*.py'
       - 'packages/extensions/tool-native-bench-frappe/**'
+      - 'apps/cli/config/examples/employee-readonly/**'
       - 'apps/cli/tests/profiles/employee-readonly/**'
       - 'apps/web/tests/employee-readonly.snapshot.ts'
       - 'snapshots/web/employee-readonly/**'
@@ -48,6 +50,8 @@ jobs:
           echo "DSH_EMPLOYEE_PROXY_PYTHON=$proxy_venv/bin/python" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
+      - name: Verify credential-free broker client
+        run: pnpm exec vitest run packages/extensions/tool-native-bench-frappe/tests/broker-client.spec.ts
       - name: Verify read broker identity and lifecycle
         run: "python -B -m unittest discover -s packages/extensions/tool-native-bench-frappe/tests -p test_employee_read_broker.py -v"
       - name: Verify transport revocation

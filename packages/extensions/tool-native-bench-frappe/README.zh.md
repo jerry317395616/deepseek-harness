@@ -45,8 +45,9 @@ kind: "package-reference"
 | 字段 | 默认值 | 含义 |
 |---|---|---|
 | `accessMode` | `maintenance` | 业务模式只提供限定范围的描述、列表和单条读取操作。 |
-| `frappeUser` | 空 | 维护模式将空值解析为 Administrator；业务模式要求明确指定账号。 |
-| `actorTokenFile` | 空 | 业务模式要求指向私有签名身份断言文件的绝对路径。 |
+| `frappeUser` | 空 | 直连业务调用要求明确账号；维护模式默认 Administrator；代理模式要求留空。 |
+| `actorTokenFile` | 空 | 直连业务调用要求私有身份断言的绝对路径；代理模式要求留空。 |
+| `brokerSocketPath` | 空 | 选择启用的 Linux Unix 套接字；要求业务模式且身份由代理管理。 |
 | `businessDoctypes` | 空 | 业务模式要求明确列出 1–64 个 DocType。 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-tool-native-bench-frappe)定义完整字段契约。维护模式会拒绝业务凭据和范围配置，不会静默忽略。
@@ -98,7 +99,9 @@ kind: "package-reference"
 
 [配置解析器](python/employee_read_broker.py)要求明确的连接数、输入和输出上限、输入输出期限及每个工作进程的执行期限。每个 UID 同时只能执行一个请求；超限连接会关闭。工作进程使用最小环境变量集，输出大小受到限制。超时或取消会终止并回收仍在运行的工作进程；服务关闭时停止接收并等待所属任务结束。仅断开连接不会取消已接受的读取。[代理测试](tests/test_employee_read_broker.py)不使用生产数据，覆盖真实本机套接字、配置命令行、子进程限制和清理。
 
-此后端尚未接入 TypeScript 客户端或员工配置方案。它不创建 Linux 用户，不限制 Bench 权限，不调度身份断言续期，也不改变服务。既有客户端仍直接启动 Bench Python。生产部署需要代理客户端、独立运行时 UID、受保护的 Bench 与配置访问，以及登录后的浏览器验收；后端测试不能认证这些隔离措施。
+设置 `brokerSocketPath`，或在员工配置方案中设置 `DSH_EMPLOYEE_BROKER_SOCKET`，即可选择 [TypeScript 套接字客户端](src/broker.ts)。代理模式要求业务访问、明确的 DocType 允许列表，并将 `frappeUser` 和 `actorTokenFile` 留空。站点、身份、凭据和 Bench 可执行程序仅由代理管理；直连路径配置不参与调用。代理不可用或拒绝访问时直接失败，不会回退到 Bench 子进程。
+
+客户端限制完整请求和响应的大小，拒绝无效 UTF-8/JSON，并返回固定诊断而不转发代理错误。期限覆盖连接建立至响应完成。取消会关闭并等待本地连接结束，不会取消服务端已接受的读取。[真实套接字客户端测试](tests/broker-client.spec.ts)覆盖这些行为。系统用户、受保护的文件系统访问、身份断言续期、服务启用和登录后的浏览器验收仍属于部署工作。
 
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench 身份断言续期
@@ -132,7 +135,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部机制 — 点击展开</summary>
 
-[插件](src/index.ts)选择工具范围和审批策略。[客户端](src/native.ts)在启动 [Python 辅助程序](python/native_frappe_query.py)前检查部署范围。辅助程序在数据库启动前检查策略，在业务读取前验证操作者，并采用 Frappe ORM 权限，而不是任意 SQL 或模型提供的 Python。[Loader 测试](tests/loader-composition.spec.ts)、[无真实凭据的 Python 测试](tests/test_business_identity.py)和[拒绝操作会话记录](../../../snapshots/session/native-frappe-business-denial/session.jsonl)分别验证不同层的边界。
+[插件](src/index.ts)选择工具范围和审批策略。[客户端](src/native.ts)检查部署范围，再选择直接调用 [Python 辅助程序](python/native_frappe_query.py)或不持有凭据的套接字客户端。两种传输均保留辅助程序的身份及 Frappe ORM 权限校验，不使用任意 SQL 或模型提供的 Python。[Loader 测试](tests/loader-composition.spec.ts)、[无真实凭据的 Python 测试](tests/test_business_identity.py)和[拒绝操作会话记录](../../../snapshots/session/native-frappe-business-denial/session.jsonl)分别验证不同层的边界。
 
 </details>
 

@@ -45,8 +45,9 @@ This configuration retains discovery, description, list/get reads, update previe
 | Field | Default | Meaning |
 |---|---|---|
 | `accessMode` | `maintenance` | Business mode exposes only scoped describe/list/get operations. |
-| `frappeUser` | Empty | Maintenance resolves empty to Administrator; business requires an explicit account. |
-| `actorTokenFile` | Empty | Business requires an absolute path to a private signed assertion file. |
+| `frappeUser` | Empty | Direct business calls require an explicit account; maintenance defaults to Administrator; broker mode requires empty. |
+| `actorTokenFile` | Empty | Direct business calls require an absolute private assertion path; broker mode requires empty. |
+| `brokerSocketPath` | Empty | Opt-in Linux Unix socket; requires business mode and broker-owned identity. |
 | `businessDoctypes` | Empty | Business requires 1–64 explicitly named DocTypes. |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-native-bench-frappe) owns the full field contract. Maintenance rejects business credentials and scope instead of ignoring them.
@@ -98,7 +99,9 @@ Each connection carries exactly one newline-terminated JSON object followed by a
 
 The [configuration parser](python/employee_read_broker.py) requires explicit connection/input/output limits, an input/output deadline and a per-worker deadline. One request per UID may run at a time; excess connections are closed. Workers receive a minimal environment and bounded output. Timeout or cancellation kills and reaps a live worker; service shutdown stops admission and awaits owned work. Disconnect alone does not cancel an accepted read. The [broker tests](tests/test_employee_read_broker.py) exercise the real local socket, configuration CLI, subprocess limits and teardown without production data.
 
-This backend is not connected to the TypeScript client or employee profiles. It does not provision Linux users, restrict Bench permissions, schedule assertion renewal or change services. The existing client still launches Bench Python directly. A production deployment requires a broker client, separate runtime UIDs, protected Bench/configuration access and authenticated browser acceptance; backend tests do not certify that isolation.
+The [TypeScript socket client](src/broker.ts) is selected by `brokerSocketPath`, or `DSH_EMPLOYEE_BROKER_SOCKET` in the employee preset. Broker mode requires business access, an explicit DocType allowlist, and empty `frappeUser` and `actorTokenFile`. The broker alone owns the site, identity, credentials and Bench executable; direct-call path settings are not used. An unavailable or denied broker fails closed and never falls back to a Bench subprocess.
+
+The client bounds the entire request and response, rejects invalid UTF-8/JSON, and returns fixed diagnostics without forwarding broker errors. Its deadline covers connection through response completion. Cancellation closes and awaits the local connection; it does not cancel an accepted server read. [Real-socket client tests](tests/broker-client.spec.ts) cover these behaviors. OS users, protected filesystem access, assertion renewal, service activation and authenticated browser acceptance remain deployment work.
 
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench assertion renewal
@@ -132,7 +135,7 @@ Preview checks an existing record and its proposed scalar changes without saving
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The [plugin](src/index.ts) selects the tool surface and approval policy. The [client](src/native.ts) checks deployment scope before spawning the [Python helper](python/native_frappe_query.py). The helper checks policy before database startup, verifies the actor before business reads, and uses Frappe ORM permissions rather than arbitrary SQL or model-supplied Python. The [Loader tests](tests/loader-composition.spec.ts), [credential-free Python tests](tests/test_business_identity.py) and [recorded denial session](../../../snapshots/session/native-frappe-business-denial/session.jsonl) exercise the boundaries at different layers.
+The [plugin](src/index.ts) selects the tool surface and approval policy. The [client](src/native.ts) checks deployment scope, then selects a direct [Python helper](python/native_frappe_query.py) call or the credential-free socket client. Both transports retain the helper's identity and Frappe ORM permission checks, without arbitrary SQL or model-supplied Python. The [Loader tests](tests/loader-composition.spec.ts), [credential-free Python tests](tests/test_business_identity.py) and [recorded denial session](../../../snapshots/session/native-frappe-business-denial/session.jsonl) exercise the boundaries at different layers.
 
 </details>
 

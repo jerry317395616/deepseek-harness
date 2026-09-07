@@ -25,6 +25,7 @@
   name: '@deepseek-ai/dsh-tool-native-bench-frappe'
   config:
     accessMode: business
+    brokerSocketPath: !!js process.env.DSH_EMPLOYEE_BROKER_SOCKET
     benchRoot: !!js process.env.DSH_EMPLOYEE_BENCH_ROOT
     site: !!js process.env.DSH_EMPLOYEE_SITE
     frappeUser: !!js process.env.DSH_EMPLOYEE_USER

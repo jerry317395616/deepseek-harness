@@ -45,8 +45,9 @@ DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.snapshot.config.ts app
 | Web profile 和已安装软件包 | 运维管理的标准 base/Web 层，能够解析 Native Bench Frappe 和 persona 插件；员工不能修改补丁 |
 | 私有状态 | 每名员工拥有独立进程、工作目录、`DSH_HOME`、`DSH_AGENTS_HOME`、持久化根目录和浏览器凭据 |
 | `DSH_EMPLOYEE_PRESET_ROOT` | 此覆盖配置相邻 `presets` 目录的绝对路径，由运维管理；不包含其他预设根目录 |
-| `DSH_EMPLOYEE_BENCH_ROOT`、`DSH_EMPLOYEE_SITE` | 明确指定的 Native Bench 目录和目标站点 |
-| `DSH_EMPLOYEE_USER`、`DSH_EMPLOYEE_ASSERTION_FILE` | 固定 Frappe 用户与私有、短时效的签名身份凭证；在对话之外维护续签 |
+| `DSH_EMPLOYEE_BENCH_ROOT`, `DSH_EMPLOYEE_SITE` | 直连调用使用的明确 Bench 目录和目标站点；套接字客户端不使用这两个值 |
+| `DSH_EMPLOYEE_USER`, `DSH_EMPLOYEE_ASSERTION_FILE` | 仅直连模式使用：固定账号与私有短期身份断言；代理模式必须取消这两个配置 |
+| `DSH_EMPLOYEE_BROKER_SOCKET` | 可选的 Linux Unix 套接字绝对路径；可信代理将每个已存在的员工 UID 绑定到其 Frappe 身份 |
 | `DSH_EMPLOYEE_DOCTYPES` | 明确批准的现有 DocType 名称 JSON 数组；空数组不授予任何文档访问权限 |
 | 模型和网络 | 运维控制的模型提供方配置、回环地址监听，以及远程开放前经过认证的员工到 Host 代理 |
 
@@ -59,7 +60,7 @@ DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.snapshot.config.ts app
 
 Gateway 仅允许明确列出的对话与只读发现接口。预设编辑和切换、配置修改、工作目录打开、附件、模型切换与会话分叉均被拒绝。模型不具备 Shell、文件系统、代码、命令、子代理、工作流或维护工具。源码配置仍是受信任的可执行代码，不是调用方可控制的权限设置。
 
-身份凭证过期或 Frappe 权限拒绝时，必须向运维报告；助手不得更换身份或退回无限制接口。DocType 源码名称及 Frappe 授权仍是事实依据。此覆盖配置不创建 DocType，也不修改业务记录或角色权限。
+身份断言过期或 Frappe 拒绝权限时，必须向操作者报告；助手不得切换身份或回退到不受限制的接口。在[代理模式](../../../packages/extensions/tool-native-bench-frappe/README.zh.md#employee-read-broker)下，员工进程不调用 Bench，也不加载身份断言文件。代理缺失会让查询失败，不会回退为直连调用。源 DocType 名称和 Frappe 授权仍是最终依据。此配置不会创建 DocType、修改业务记录或角色权限。
 
 独立进程和目录提供应用层隔离，不是共享同一 Unix 账号进程之间的操作系统沙箱。允许的事件流覆盖整个私有 Host。代理路由、员工登录、活动 WebSocket 撤销、真实账号的行级权限以及模型提供方的数据处理仍需部署验收。不能将不同员工接入同一个 Host 后称为已经隔离。
 
