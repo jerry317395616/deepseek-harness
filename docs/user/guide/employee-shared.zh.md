@@ -27,7 +27,9 @@ DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.sn
 
 [身份服务](../../../packages/extensions/tool-native-bench-frappe/python/shared_identity.py)是独立的可信辅助进程，不是另一个 Harness 实例。它验证 Frappe 签发的一次性交接票据，并通过已有 Native Bench 只检查辅助程序复查当前已启用的系统用户。允许列表引用已有的逐账号身份配置。未知账号被拒绝，不会自动允许站点全部用户进入。
 
-身份服务通过私有 Unix 套接字，只接受内核确认的指定运行时 UID。正式配置拒绝将 root、身份服务 UID 或 Bench 所有者 UID 用作运行时身份。Harness 进程获得经过验证的 `{site,user}` 主体和不透明登录 Cookie，不获得签名密钥或 Bench 凭据。请求不能自行指定用户或所有者。
+身份服务通过私有 Unix 套接字，只接受内核确认的指定运行时 UID。默认 `separate` UID 策略拒绝将 root、身份服务 UID 或 Bench 所有者 UID 用作运行时身份。显式 `single-user` 策略要求运行时、身份服务及每个 Bench 所有者使用同一个非 root UID。协议返回经过验证的 `{site,user}` 主体和不透明登录 Cookie，不返回签名密钥或 Bench 凭据。请求不能自行指定用户或所有者。
+
+单账号模式提供应用层账号区分，不提供操作系统隔离：以同一 UID 运行的不受限进程可以访问相同的私有文件。不得向员工开放 shell、任意文件访问、配置编辑或 Host 凭据。此选项不授权员工 Agent 执行或业务写入。
 
 [会话 API](../../../packages/api/session-controller/src/employee-access.ts)分配随机会话编号，在创建前发布不可变的归属记录，并在确认成功前持久化该会话。归属文件保存在模型日志之外的私有规范化目录。创建失败可能留下归属预留记录；列表只返回实际存在且属于当前账号的会话。没有归属的旧会话会被拒绝，不会分配给下一位访问者。
 
@@ -55,13 +57,14 @@ Host 和写请求的 Origin 必须匹配指定 HTTPS 源。重复 Cookie、未�
 
 | 字段 | 契约 |
 |---|---|
-| `version`, `socket_path`, `runtime_uid` | 版本 1、受保护且规范化的 Linux 套接字位置、一个独立运行时 UID |
+| `version`, `socket_path`, `runtime_uid` | 版本 1、受保护且规范化的 Linux 套接字位置、一个非 root 运行时 UID |
+| `uid_policy` | 可选 `separate`（默认）或显式 `single-user`；单账号模式拒绝混合所有权 |
 | `issuer`, `secret_file`, `identity_configs` | 精确站点、私有签名密钥文件、1–256 份已有账号检查配置 |
 | `session_seconds`, `max_sessions` | 60–28800 秒、1–4096 个同时有效的登录 |
 | `max_connections`, `timeout_seconds` | 1–64 条连接、每次操作 1–30 秒 |
 | `read_doctypes` | 必填列表，包含 0–64 个不重复的安全 DocType；空列表禁用全部业务读取 |
 
-读取还要求每个账号已有有效的身份断言。可信部署负责[断言续期](../../../packages/extensions/tool-native-bench-frappe/README.zh.md#native-bench-assertion-renewal)；共享运行时不能续期或读取断言文件。断言缺失或过期时拒绝访问。无密钥夹具仅替换账号状态及业务查询结果；真实 Frappe 权限与浏览器验收仍属于部署工作。
+读取还要求每个账号已有有效的身份断言。可信部署负责[断言续期](../../../packages/extensions/tool-native-bench-frappe/README.zh.md#native-bench-assertion-renewal)；共享 API 不开放续期或断言文件。单账号模式无法阻止同一 UID 下的不受限代码访问这些文件。断言缺失或过期时拒绝访问。无密钥夹具仅替换账号状态及业务查询结果；真实 Frappe 权限与浏览器验收仍属于部署工作。
 
 ## 正式开放前
 
@@ -69,7 +72,7 @@ Host 和写请求的 Origin 必须匹配指定 HTTPS 源。重复 Cookie、未�
 
 按 UID 绑定的只读业务代理仍将一个 UID 映射到一名员工，不能为共享进程内的不同员工授权。共享身份服务为每次读取独立选择账号。开放提示执行前，必须将每个排队的 Agent 轮次绑定到经过验证的调用者，在不把凭据放入模型输入的前提下连接读取桥接层，并记录实际工具调用及结果。写入需要独立的业务服务、流程检查和审批。不得接受模型指定的执行身份或回退到 Administrator。
 
-共享运行时必须与 Bench 所有权和签名材料隔离，保护直连端口及所有未按账号授权的 API，对代理日志中的票据查询脱敏，并验证负载下的资源上限。本阶段不改变 Frappe DocType、业务记录、账号权限或正式服务。
+需要在操作系统层隔离 Bench 所有权和签名材料时，应使用不同 UID。两种策略都必须保护直连端口及所有未按账号授权的 API，对代理日志中的票据查询脱敏，并验证负载下的资源上限。本预览不改变 Frappe DocType、业务记录、账号权限或正式服务。
 
 ## 开发备注
 

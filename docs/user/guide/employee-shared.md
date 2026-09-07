@@ -27,7 +27,9 @@ The recorded-session test uses a trusted Host test driver to seed the existing t
 
 The [identity authority](../../../packages/extensions/tool-native-bench-frappe/python/shared_identity.py) is a separate trusted auxiliary process, not another Harness instance. It validates signed single-use Frappe handoffs and rechecks the current enabled System User through the existing Native Bench check-only helper. Its allowlist references existing per-account identity configurations. Unknown accounts are denied; this is not automatic admission of every site user.
 
-The authority accepts only its configured runtime's kernel UID over a private Unix socket. Production configuration rejects root, the authority UID and the Bench-owner UID as runtime identities. The Harness process receives a verified `{site,user}` principal and opaque login cookie, never a signing key or Bench credential. A request cannot supply its own user or owner.
+The authority accepts only its configured runtime's kernel UID over a private Unix socket. The default `separate` UID policy rejects root, the authority UID and the Bench-owner UID as runtime identities. Explicit `single-user` policy requires one non-root UID for the runtime, authority and every Bench owner. The protocol returns a verified `{site,user}` principal and opaque login cookie, not signing keys or Bench credentials. A request cannot supply its own user or owner.
+
+Single-user mode is application-level account separation, not OS isolation: any unrestricted process running as that UID can access the same private files. Do not give employees shell, arbitrary file access, configuration editing or Host credentials. This option does not authorize employee Agent execution or business writes.
 
 The [session API](../../../packages/api/session-controller/src/employee-access.ts) assigns a random session ID, publishes an immutable owner record before creation, and materializes that exact session before acknowledging it. Owner files live in a private canonical directory outside model logs. A failed creation can leave an owner reservation; listings return only existing owned sessions. Legacy sessions without ownership are denied rather than assigned to the next caller.
 
@@ -55,13 +57,14 @@ The authority runs with `--config` pointing to an operator-owned private JSON fi
 
 | Field | Contract |
 |---|---|
-| `version`, `socket_path`, `runtime_uid` | Version 1, canonical protected Linux socket location, one distinct runtime UID |
+| `version`, `socket_path`, `runtime_uid` | Version 1, canonical protected Linux socket location, one non-root runtime UID |
+| `uid_policy` | Optional `separate` (default) or explicit `single-user`; mixed ownership is rejected in single-user mode |
 | `issuer`, `secret_file`, `identity_configs` | Exact site, private signing-key file, 1–256 existing account-check configurations |
 | `session_seconds`, `max_sessions` | 60–28800 seconds, 1–4096 simultaneous logins |
 | `max_connections`, `timeout_seconds` | 1–64 connections, 1–30 seconds per operation |
 | `read_doctypes` | Required list of 0–64 distinct safe DocTypes; an empty list disables all business reads |
 
-Read access also requires an existing valid assertion for each account. The trusted deployment owns [assertion renewal](../../../packages/extensions/tool-native-bench-frappe/README.md#native-bench-assertion-renewal); the shared runtime cannot renew assertions or read their files. Missing or expired assertions fail closed. The keyless fixture substitutes only account state and business query results; live Frappe permission and browser acceptance remain deployment work.
+Read access also requires an existing valid assertion for each account. The trusted deployment owns [assertion renewal](../../../packages/extensions/tool-native-bench-frappe/README.md#native-bench-assertion-renewal); the shared API exposes neither renewal nor assertion files. Single-user mode cannot protect these files against unrestricted code under the same UID. Missing or expired assertions fail closed. The keyless fixture substitutes only account state and business query results; live Frappe permission and browser acceptance remain deployment work.
 
 ## Before production admission
 
@@ -69,7 +72,7 @@ The existing Frappe launcher targets `/sso`; this preview uses `/employee/sso`. 
 
 The UID-bound read broker still maps one UID to one employee. It cannot authorize different employees inside a shared process. The shared authority selects the account independently for each read. Before enabling prompt execution, bind each queued Agent turn to its verified caller, attach the read bridge without placing credentials in model inputs, and log actual tool calls and results. Writes require their own business services, workflow checks and approvals. Never accept a model-selected actor or use an Administrator fallback.
 
-Keep the shared runtime separate from Bench ownership and signing material, protect direct ports and every unscoped API, redact proxy ticket queries, and validate resource limits under load. This increment changes no Frappe DocType, business record, account permission or production service.
+Use separate UIDs when OS isolation from Bench ownership and signing material is required. Under either policy, protect direct ports and every unscoped API, redact proxy ticket queries, and validate resource limits under load. This preview changes no Frappe DocType, business record, account permission or production service.
 
 ## Dev Note
 

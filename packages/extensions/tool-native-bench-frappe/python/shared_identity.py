@@ -1,7 +1,8 @@
 """Account-scoped SSO authority for one shared Harness runtime on Linux.
 
 Only the configured runtime UID may exchange tickets or resolve login sessions.
-The runtime receives an identity, never the signing key or Bench credentials.
+The protocol returns identities, never signing keys or Bench credentials.
+Single-user mode provides no OS isolation from other processes with that UID.
 Scoped reads use the login's pinned Frappe identity and current ORM permissions.
 This auxiliary service neither launches Harness nor grants write access.
 """
@@ -53,6 +54,7 @@ class Configuration:
     max_connections: int
     timeout_seconds: int
     read_doctypes: tuple[str, ...] = ()
+    uid_policy: str = "separate"
 
     @classmethod
     def load(cls, path):
@@ -62,7 +64,7 @@ class Configuration:
         fields = {"version", "socket_path", "runtime_uid", "issuer", "secret_file",
                   "identity_configs", "session_seconds", "max_sessions",
                   "max_connections", "timeout_seconds", "read_doctypes"}
-        if (not isinstance(raw, dict) or set(raw) != fields
+        if (not isinstance(raw, dict) or set(raw) not in (fields, fields | {"uid_policy"})
                 or type(raw["version"]) is not int or raw["version"] != 1):
             raise ValueError("invalid shared identity configuration")
         target = Path(raw["socket_path"])
@@ -71,8 +73,13 @@ class Configuration:
         trusted_directory(target.parent)
         uid = integer(raw["runtime_uid"], 1, 2**31 - 1)
         pwd.getpwuid(uid)
-        if uid == os.geteuid():
+        policy = raw.get("uid_policy", "separate")
+        if policy not in ("separate", "single-user"):
+            raise ValueError("invalid UID policy")
+        if policy == "separate" and uid == os.geteuid():
             raise ValueError("runtime and authority require different OS users")
+        if policy == "single-user" and uid != os.geteuid():
+            raise ValueError("single-user mode requires the authority UID")
         issuer = raw["issuer"]
         if not isinstance(issuer, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,127}", issuer):
             raise ValueError("invalid issuer")
@@ -85,8 +92,9 @@ class Configuration:
         identities = {}
         for source in paths:
             identity = IdentityConfiguration.load(source)
+            same_owner = uid == identity.bench_root.stat().st_uid
             if (identity.site != issuer or identity.user in identities
-                    or uid == identity.bench_root.stat().st_uid):
+                    or same_owner != (policy == "single-user")):
                 raise ValueError("invalid account association")
             identities[identity.user] = (source, identity)
         scope = raw["read_doctypes"]
@@ -101,7 +109,7 @@ class Configuration:
                    integer(raw["session_seconds"], 60, 28800),
                    integer(raw["max_sessions"], 1, 4096),
                    integer(raw["max_connections"], 1, 64),
-                   integer(raw["timeout_seconds"], 1, 30), tuple(scope))
+                   integer(raw["timeout_seconds"], 1, 30), tuple(scope), policy)
 
 
 @dataclass(frozen=True)

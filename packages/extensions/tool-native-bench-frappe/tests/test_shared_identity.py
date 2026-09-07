@@ -383,6 +383,39 @@ class IdentityTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ValueError):
                     Configuration.load("/synthetic/config")
 
+    def test_uid_policy_requires_explicit_consistent_nonroot_ownership(self):
+        base = {"version": 1, "socket_path": str(self.config.socket_path), "runtime_uid": 1000,
+                "issuer": "example.test", "secret_file": "unused", "identity_configs": ["/synthetic/account"],
+                "session_seconds": 60, "max_sessions": 4, "max_connections": 4, "timeout_seconds": 2,
+                "read_doctypes": ["Student"]}
+        cases = [
+            ({}, 1000, 1000, False),
+            ({}, 1001, 1001, True),
+            ({}, 1001, 1000, False),
+            ({"uid_policy": "separate"}, 1001, 1001, True),
+            ({"uid_policy": "single-user"}, 1000, 1000, True),
+            ({"uid_policy": "single-user"}, 1001, 1000, False),
+            ({"uid_policy": "single-user"}, 1000, 1001, False),
+            ({"uid_policy": "single-user", "runtime_uid": 0}, 0, 0, False),
+            ({"uid_policy": "automatic"}, 1000, 1000, False),
+            ({"uid_policy": None}, 1000, 1000, False),
+        ]
+        for override, authority_uid, bench_uid, accepted in cases:
+            identity = SimpleNamespace(site="example.test", user="teacher@example.test",
+                                       bench_root=SimpleNamespace(stat=lambda: SimpleNamespace(st_uid=bench_uid)))
+            with self.subTest(override=override, authority_uid=authority_uid, bench_uid=bench_uid), \
+                 patch("shared_identity.private_bytes", side_effect=[json.dumps({**base, **override}).encode(), self.config.secret]), \
+                 patch("shared_identity.trusted_directory"), patch("shared_identity.pwd.getpwuid"), \
+                 patch("shared_identity.os.geteuid", return_value=authority_uid), \
+                 patch("shared_identity.IdentityConfiguration.load", return_value=identity):
+                if accepted:
+                    config = Configuration.load("/synthetic/config")
+                    self.assertEqual(config.uid_policy, override.get("uid_policy", "separate"))
+                    self.assertEqual(config.read_doctypes, ("Student",))
+                else:
+                    with self.assertRaises(ValueError):
+                        Configuration.load("/synthetic/config")
+
 
 if __name__ == "__main__":
     unittest.main()
