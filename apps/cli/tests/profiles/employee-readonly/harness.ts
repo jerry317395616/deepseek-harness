@@ -96,6 +96,7 @@ export async function startEmployee(
     ...(sharedAccess === undefined ? {} : {
       DSH_SHARED_IDENTITY_SOCKET: sharedAccess.socketPath, DSH_SHARED_PUBLIC_ORIGIN: sharedAccess.publicOrigin,
       DSH_SHARED_OWNERS_DIRECTORY: join(home, 'employee-owners'),
+      DSH_SHARED_PRESET_ROOT: join(repo, 'apps/cli/config/examples/employee-shared/presets'),
     }),
     DSH_EMPLOYEE_BENCH_ROOT: join(root, 'missing-bench'),
     DSH_EMPLOYEE_SITE: 'example.test',

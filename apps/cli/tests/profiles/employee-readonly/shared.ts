@@ -53,9 +53,12 @@ export async function startSharedAuthority(disposers: (() => Promise<unknown>)[]
   return { socketPath, publicOrigin, ticket, disable }
 }
 
-export async function sharedRequest(origin: string, path: string, cookie?: string, input?: object): Promise<Response> {
+export async function sharedRequest(
+  origin: string, path: string, cookie?: string, input?: object, signal?: AbortSignal,
+): Promise<Response> {
   return new Promise((resolve, reject) => {
     const request = httpRequest(new URL(path, origin), { method: input === undefined ? 'GET' : 'POST',
+      ...(signal === undefined ? {} : { signal }),
       headers: { host: new URL(publicOrigin).host, origin: publicOrigin,
         ...(cookie === undefined ? {} : { cookie }), 'content-type': 'application/json' } }, (response) => {
       const chunks: Buffer[] = []

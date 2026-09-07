@@ -137,8 +137,8 @@ async function fixture(overrides: Partial<Config> = {}) {
 }
 
 describe.skipIf(process.platform !== 'linux')('shared HTTP preview', () => {
-  it('denies direct employee and actorless tool execution even after an allow listener, and disposes its guard', async () => {
-    const f = await fixture()
+  it.each([undefined, 'employee-shared-readonly'])('denies unbound tool execution and disposes the guard (preset %s)', async (promptPreset) => {
+    const f = await fixture(promptPreset === undefined ? {} : { promptPreset })
     const created = await f.call('/employee/session/create', '{}')
     const { sessionId } = JSON.parse(created.text) as { sessionId: SessionId }
     let calls = 0

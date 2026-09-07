@@ -31,7 +31,7 @@ The Client adapter exposes `SessionEventStream`, a Gateway `RemoteJournalStream`
 
 The Session object also carries local submission echoes: `session.beginSubmission` inserts one into `SessionSnapshot.pendingSubmissions` synchronously, before the caller serializes and prompts, so a conversation UI can show the message on the submit click's own frame. Session derives each echo's `transcript`, `queued`, or `steering` placement from its current running state and the requested delivery mode, then retains that placement while serialization is in flight. The prompt's `requestId` is the correlation identity: the Host echoes it as the durable user source's `rpcId`, and queue occurrences project it as `SessionQueuedItem.rpcId`. An echo retires one animation frame after its durable event or queue occurrence is observed (the delay keeps it renderable until the replacement is ready), immediately when its identified prompt fails or is abandoned, and as failed on disposal; each retirement fires the registered `onRetire` callback exactly once. Echoes are Client memory only; reload and reconnect rebuild the conversation from durable events alone.
 
-The opt-in `@deepseek-ai/dsh-api-session-controller/employee-access` subpath mounts a separate account-owned session API. Host RPC authentication remains separate, but employee-owned Agent execution is blocked even through Host commands; a monotonic guard denies employee-owned and actorless tool calls. The [shared employee preview guide](../../../docs/user/guide/employee-shared.md) owns its explicit configuration, ownership persistence and deployment requirements. Employees can create, list and page their own sessions and request scoped Frappe reads through the trusted account authority. Prompting, model tools, search, attachments and global streams remain denied; read responses are not appended to model history.
+The opt-in `@deepseek-ai/dsh-api-session-controller/employee-access` subpath mounts a separate account-owned session API. Optional `promptPreset` enables request-bound read-only turns; without it, employee execution is blocked. Host commands cannot supply employee authority. The [shared employee preview guide](../../../docs/user/guide/employee-shared.md) owns configuration, persistence and deployment requirements. Employees can create, list and page owned sessions and request scoped Frappe reads. Authenticated prompts retain credentials only in request memory, revalidate before model requests and around reads, and record tool results in owned history. Search, attachments, writes and global streams remain denied.
 
 -----
 
@@ -50,11 +50,19 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as invoked Agent commands own any model-visible effect.
+### Authenticated employee read turns
+
+#### What the model sees
+
+The configured owned preset receives the [employee read schema](../../../docs/tool-catalog.md#deepseek-aidsh-api-session-controller). Tool results contain permission-filtered JSON text; credentials and owner records are excluded. Other tools are denied, including actorless calls, with `Employee Agent execution is unavailable.`
+
+#### Token effect
+
+The tool schema is stable per preset. Query results append to history and are bounded by the authority's 262144-byte response limit; provider token limits remain independent.
 
 #### KV Cache effect
 
-No direct effect; model requests remain owned by the Agent and LLM packages.
+Read results append to the existing prefix. A preset or tool-schema change can invalidate prefix reuse; credentials are not prompt inputs.
 
 ## Known Limitations and Deferred Work
 
@@ -63,6 +71,7 @@ No direct effect; model requests remain owned by the Agent and LLM packages.
 - Control baselines represent process-local state and therefore cannot reconstruct jobs after a Host restart.
 - A failed follow resumption remains visible to the caller instead of retrying indefinitely.
 - File-reference completion uses the shared Agent lookup and can resume a cold Session; the `skills/list` catalog is the non-activating alternative for skill metadata.
+- Employee turns accept one active text request per session, with no streaming UI or automatic execution resumption; timeout and disconnect cancel and join local execution.
 
 
 <a id="dev-note"></a>

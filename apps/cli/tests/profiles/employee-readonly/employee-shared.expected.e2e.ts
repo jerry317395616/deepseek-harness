@@ -68,7 +68,8 @@ describe.skipIf(process.platform !== 'linux')('single Harness account-owned sess
     for (const input of [{ sessionId: bId }, { user: 'finance@example.test' }, { agentPreset: 'standard' }]) {
       expect((await a.raw('/employee/session/create', input)).status).toBe(400)
     }
-    for (const path of ['/employee/session/prompt', '/employee/session/follow', '/employee/session/search', '/employee/attachment']) {
+    expect((await a.raw('/employee/session/prompt')).status).toBe(400)
+    for (const path of ['/employee/session/follow', '/employee/session/search', '/employee/attachment']) {
       expect((await a.raw(path)).status).toBe(404)
     }
     expect((await host.raw('session/list', { _request: {} }, a.cookie)).status).toBe(401)

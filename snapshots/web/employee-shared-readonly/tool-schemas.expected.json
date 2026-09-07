@@ -1,0 +1,25 @@
+{
+  "initial": [
+    {
+      "name": "employee_frappe_read",
+      "description": "Read permitted Frappe metadata, lists or one record using your current login. Never supply an account, site, SQL or executable code.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "frappe_describe_doctype, frappe_list_documents or frappe_get_document."
+          },
+          "arguments": {
+            "description": "Structured query: doctype; optional fields, filters, order_by, limit, start; name for one record."
+          }
+        },
+        "required": [
+          "operation",
+          "arguments"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}

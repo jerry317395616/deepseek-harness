@@ -1,5 +1,5 @@
 ---
-description: "Evaluate account-owned sessions in one shared Harness process without enabling employee agent execution."
+description: "Evaluate account-owned sessions and authenticated read-only Agent turns in one shared Harness process."
 ---
 
 # Shared employee session preview
@@ -8,7 +8,7 @@ English | [中文](employee-shared.zh.md)
 
 ## Summary
 
-This opt-in overlay admits multiple verified Frappe accounts to one Harness process for session creation, listing, history paging and scoped Frappe reads. It is an API preview, not a shared chat interface or a production deployment. Employee prompt execution, model tools, attachments, search and global event streams remain unavailable.
+This opt-in overlay admits multiple verified Frappe accounts to one Harness process for owned sessions, scoped Frappe reads and authenticated read-only Agent turns. It is an API preview, not a shared chat interface or a production deployment. Attachments, search, business writes and global event streams remain unavailable.
 
 ## Evaluate the preview
 
@@ -18,10 +18,11 @@ Use Linux, Python 3.14 and a built checkout. `DSH_SHARED_IDENTITY_PYTHON` may se
 
 ```sh
 DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.expected.config.ts apps/cli/tests/profiles/employee-readonly/employee-shared.expected.e2e.ts
-DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-readonly.snapshot.ts
+DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.expected.config.ts apps/cli/tests/profiles/employee-readonly/employee-turns.expected.e2e.ts
+DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-shared.snapshot.ts
 ```
 
-The recorded-session test uses a trusted Host test driver with a separate unowned session to replay the dedicated read-only persona. It also submits the same input to an employee-owned session and verifies that no model step starts. Employees cannot invoke the Host prompt endpoint. Neither identity nor login credentials enter the model transcript; this overlay changes no model prompt, schema or event contract.
+The recorded-session test submits text through the employee API and records the permission-scoped tool result. The process tests also verify that a Host prompt cannot start an unbound employee turn. Employees cannot invoke the Host prompt endpoint. Neither identity nor login credentials enter the model transcript; the shared preset exposes only `employee_frappe_read`.
 
 ## Identity and session ownership
 
@@ -33,27 +34,32 @@ Single-user mode is application-level account separation, not OS isolation: any 
 
 The [session API](../../../packages/api/session-controller/src/employee-access.ts) assigns a random session ID, publishes an immutable owner record before creation, and materializes that exact session before acknowledging it. Owner files live in a private canonical directory outside model logs. A failed creation can leave an owner reservation; listings return only existing owned sessions. Legacy sessions without ownership are denied rather than assigned to the next caller.
 
-The preview blocks employee-owned Agent steps and model requests even when submitted through the trusted Host API. Its monotonic tool guard also denies employee-owned and actorless tool calls. Startup loads the bounded ownership index before mounting routes; new reservations enter the index before asynchronous publication. Operators must not edit ownership files while the service runs. Unowned Host sessions retain their existing execution policy; employee cookies cannot access them. Authenticated reads use the dedicated read endpoint, not the Agent tool runtime.
+Without `promptPreset`, the API blocks all employee Agent execution. With that explicit preset, only a server-identified message admitted through the employee prompt endpoint can enter a turn. Startup loads the bounded ownership index before mounting routes; new reservations enter the index before asynchronous publication. Operators must not edit ownership files while the service runs. Unowned Host sessions retain their existing execution policy; employee cookies cannot access them.
 
 | Endpoint | Admitted behavior |
 |---|---|
 | `GET /employee/sso?token=…` | Exchange one signed handoff for a Secure, HttpOnly, SameSite=Strict cookie; redirect to status |
-| `GET /employee/status` | Revalidate login and report `access: read-preview`, `agentExecution: false` |
+| `GET /employee/status` | Revalidate login; report `read-only-turns` with execution enabled when `promptPreset` is set, otherwise `read-preview` with execution disabled |
 | `POST /employee/logout` | Revoke login and expire its cookie |
 | `POST /employee/session/create` | Accept only `{}` and create a server-owned session |
 | `POST /employee/session/list` | Accept only `{}` and return bounded metadata for this account |
 | `POST /employee/session/page` | Read a bounded history page only after checking session ownership |
 | `POST /employee/session/read` | Accept `sessionId`, a permitted read `operation` and structured `arguments`; require session ownership and current Frappe permissions |
+| `POST /employee/session/prompt` | With `promptPreset`, accept only `sessionId` and `text`; wait for settlement and return `throughSeq` for owned history paging |
 
 Host and write Origin must match the configured HTTPS origin. Duplicate cookies, unknown fields and unsupported operations are rejected. Authentication is repeated before releasing results. Logout, account disablement, dependency failure or expiry denies later access; authority restart discards logins. Timeout, disconnect and plugin disposal abort and await local request work, but cannot undo accepted session creation or cancel an accepted remote read immediately. Remote reads have the authority deadline; shutdown cancels and awaits its workers.
 
 The read endpoint accepts only `frappe_describe_doctype`, `frappe_list_documents` and `frappe_get_document`. The authority resolves the opaque login to its pinned account configuration, validates the explicit DocType scope and invokes the existing business reader with that account's private assertion. It does not authorize by the shared runtime UID or accept user, site, executable, permission-bypass or write arguments. The existing reader checks the signed account and uses Frappe permissions and `get_list`; this layer adds no class-access policy of its own.
 
+An authenticated turn retains its opaque login only in request memory. Before each model request and around each read, the executor verifies the same enabled account. Only the admitted message may start its numbered turn; another queued or steering message cannot inherit that authority. Each session admits one active prompt. Logout cancels its active prompts; disconnect and timeout cancel and join the Agent. Restart restores ownership but never execution credentials. A fresh login can submit a new turn, not revive old work. `settled` means the activity ended, not that a business operation succeeded; inspect its history using the returned `throughSeq`.
+
+The scoped `employee_frappe_read` tool uses the same three authority operations and records ordinary tool calls and results. Its body checks the bound Agent and revalidates the login; a monotonic guard rejects other tools and actorless execution. The deployment-owned shared preset has no shell, files, subagents or fixed-account Frappe client. Requests cannot select a preset, user, site or execution mode. Authority reads remain independently deadline-bound; local cancellation does not promise immediate termination of an already accepted remote read.
+
 Only one read per account runs at a time. Queries remain bounded to 8192 wire bytes and replies to 262144 bytes, with any smaller API response limit also applied. Revocation during a read discards the result; a new login cannot revive the old request. Results return to the authenticated API caller and are not appended to model history. This endpoint is not an Agent tool or an audit-complete AI execution path.
 
 ## Explicit configuration
 
-The overlay reads `DSH_SHARED_PUBLIC_ORIGIN`, `DSH_SHARED_IDENTITY_SOCKET` and `DSH_SHARED_OWNERS_DIRECTORY`. Its source pins request, scan, response and deadline limits. The [plugin Config](../../../packages/api/session-controller/src/employee-access.ts) is the complete API contract; do not expose configuration or Host launch credentials to employees.
+The overlay reads `DSH_SHARED_PUBLIC_ORIGIN`, `DSH_SHARED_IDENTITY_SOCKET`, `DSH_SHARED_OWNERS_DIRECTORY` and `DSH_SHARED_PRESET_ROOT`. The last points to the overlay's `presets` directory; `promptPreset` selects `employee-shared-readonly`. Its source pins request, scan, response and deadline limits. The [plugin Config](../../../packages/api/session-controller/src/employee-access.ts) is the complete API contract; do not expose configuration or Host launch credentials to employees.
 
 The authority runs with `--config` pointing to an operator-owned private JSON file. `--check` validates configuration without opening a listener. Accepted keys are exact:
 
@@ -72,10 +78,10 @@ Read access also requires an existing valid assertion for each account. The trus
 
 The existing Frappe launcher targets `/sso`; this preview uses `/employee/sso`. Production routing, a shared employee UI and real browser/TLS SSO acceptance are not installed by this change. Ordinary Host cookies still authorize privileged Host APIs; an employee cookie does not. Never distribute the Host launch URL to shared employees.
 
-The UID-bound read broker still maps one UID to one employee. It cannot authorize different employees inside a shared process. The shared authority selects the account independently for each read. Before enabling prompt execution, bind each queued Agent turn to its verified caller, attach the read bridge without placing credentials in model inputs, and log actual tool calls and results. Writes require their own business services, workflow checks and approvals. Never accept a model-selected actor or use an Administrator fallback.
+The UID-bound read broker still maps one UID to one employee. It cannot authorize different employees inside a shared process. The shared authority selects the account independently for each read. The authenticated API needs real browser/TLS SSO and live-site acceptance before employee rollout. Writes require their own business services, workflow checks and approvals. Never accept a model-selected actor or use an Administrator fallback.
 
 Use separate UIDs when OS isolation from Bench ownership and signing material is required. Under either policy, protect direct ports and every unscoped API, redact proxy ticket queries, and validate resource limits under load. This preview changes no Frappe DocType, business record, account permission or production service.
 
 ## Dev Note
 
-The [decision note](../../../.agents/notes/implemented/architecture/2026-09-07-shared-session-ownership.md) records why this preview does not yet replace dedicated employee execution.
+The [ownership decision](../../../.agents/notes/implemented/architecture/2026-09-07-shared-session-ownership.md) and [request-owned turns](../../../.agents/notes/implemented/architecture/2026-09-07-employee-authenticated-turns.md) record the shared API's authorization and deployment limits.

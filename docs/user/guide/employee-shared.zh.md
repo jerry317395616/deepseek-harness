@@ -1,5 +1,5 @@
 ---
-description: "在一个共享 Harness 进程中验证账号所属会话，不开放员工 Agent 执行。"
+description: "在一个共享 Harness 进程中验证账号所属会话及经过认证的只读 Agent 轮次。"
 ---
 
 # 共享员工会话预览
@@ -8,7 +8,7 @@ description: "在一个共享 Harness 进程中验证账号所属会话，不开
 
 ## 概要
 
-此可选叠加配置允许多个经过验证的 Frappe 账号在同一个 Harness 进程中创建会话、查看自己的列表和分页历史，并执行限定范围的 Frappe 读取。它是 API 预览，不是共享聊天界面或正式部署。员工提示执行、模型工具、附件、搜索和全局事件流仍未开放。
+此可选叠加配置允许多个经过验证的 Frappe 账号在同一个 Harness 进程中使用所属会话、限定范围的 Frappe 读取及经过认证的只读 Agent 轮次。它是 API 预览，不是共享聊天界面或正式部署。附件、搜索、业务写入和全局事件流仍未开放。
 
 ## 验证预览
 
@@ -18,10 +18,11 @@ description: "在一个共享 Harness 进程中验证账号所属会话，不开
 
 ```sh
 DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.expected.config.ts apps/cli/tests/profiles/employee-readonly/employee-shared.expected.e2e.ts
-DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-readonly.snapshot.ts
+DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.expected.config.ts apps/cli/tests/profiles/employee-readonly/employee-turns.expected.e2e.ts
+DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-shared.snapshot.ts
 ```
 
-会话回放测试使用可信 Host 测试驱动，在独立的无员工归属会话中回放专用只读角色。测试还向员工所属会话提交相同输入，验证没有启动模型步骤。员工不能调用 Host 提示接口。身份和登录凭据均不进入模型转录；此叠加配置不改变模型提示、工具 schema 或事件契约。
+会话回放测试通过员工 API 提交文本，并记录权限范围内的工具结果。进程测试还验证 Host 提示不能启动未绑定身份的员工轮次。员工不能调用 Host 提示接口。身份和登录凭据均不进入模型转录；共享预设仅提供 `employee_frappe_read`。
 
 ## 身份与会话归属
 
@@ -33,27 +34,32 @@ DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.sn
 
 [会话 API](../../../packages/api/session-controller/src/employee-access.ts)分配随机会话编号，在创建前发布不可变的归属记录，并在确认成功前持久化该会话。归属文件保存在模型日志之外的私有规范化目录。创建失败可能留下归属预留记录；列表只返回实际存在且属于当前账号的会话。没有归属的旧会话会被拒绝，不会分配给下一位访问者。
 
-即使通过可信 Host API 提交，预览也会阻止员工所属 Agent 步骤和模型请求。不可被允许规则覆盖的工具检查还会拒绝员工所属及无 Agent 身份的工具调用。启动时先加载有数量上限的归属索引，再挂载路由；新预留在异步发布前进入索引。操作者不得在服务运行时编辑归属文件。无员工归属的 Host 会话保留现有执行策略，员工 Cookie 不能访问这些会话。已认证读取使用专用读取接口，不经过 Agent 工具运行时。
+未配置 `promptPreset` 时，API 阻止全部员工 Agent 执行。显式配置该预设后，只有通过员工提示接口准入且由服务端标识的消息才能进入轮次。启动时先加载有数量上限的归属索引，再挂载路由；新预留在异步发布前进入索引。操作者不得在服务运行时编辑归属文件。无员工归属的 Host 会话保留现有执行策略，员工 Cookie 不能访问这些会话。
 
 | 接口 | 允许的行为 |
 |---|---|
 | `GET /employee/sso?token=…` | 将一次签名交接票据换成带 Secure、HttpOnly、SameSite=Strict 属性的 Cookie，并跳转到状态页 |
-| `GET /employee/status` | 复查登录状态并报告 `access: read-preview`、`agentExecution: false` |
+| `GET /employee/status` | 复查登录；配置 `promptPreset` 时报告 `read-only-turns` 且启用执行，否则报告 `read-preview` 且禁用执行 |
 | `POST /employee/logout` | 撤销登录并使 Cookie 过期 |
 | `POST /employee/session/create` | 只接受 `{}`，创建由服务端指定归属的会话 |
 | `POST /employee/session/list` | 只接受 `{}`，返回当前账号有大小上限的会话元数据 |
 | `POST /employee/session/page` | 先检查会话归属，再读取有上限的历史页 |
 | `POST /employee/session/read` | 接受 `sessionId`、允许的读取 `operation` 和结构化 `arguments`；要求会话归属及当前 Frappe 权限 |
+| `POST /employee/session/prompt` | 配置 `promptPreset` 后，只接受 `sessionId` 和 `text`；等待活动结束，并返回用于所属历史分页的 `throughSeq` |
 
 Host 和写请求的 Origin 必须匹配指定 HTTPS 源。重复 Cookie、未知字段及不支持的操作被拒绝。结果返回前再次认证。退出、账号停用、依赖失败或过期会拒绝后续访问；身份服务重启会清空登录。超时、断开连接及插件销毁会取消并等待本地请求任务，但不能撤回已接受的会话创建，也不能立即取消已接受的远程读取。远程读取受身份服务的期限约束；服务关闭时取消并等待所属工作进程。
 
 读取接口只接受 `frappe_describe_doctype`、`frappe_list_documents` 和 `frappe_get_document`。身份服务将不透明登录解析到固定的账号配置，校验明确的 DocType 范围，再使用该账号的私有身份断言调用已有业务读取程序。它不按共享运行时 UID 授权，也不接受用户、站点、可执行文件、权限绕过或写入参数。已有读取程序校验签名账号，使用 Frappe 权限与 `get_list`；此层不自行增加班级访问策略。
 
+经过认证的轮次仅在请求内存中保留不透明登录。每次模型请求前及读取前后，执行器都验证同一个启用账号。只有已准入消息可以启动其编号轮次；其他排队或插入消息不能继承授权。每个会话只接受一个活动提示。退出会取消该登录的活动提示；断开和超时会取消并等待 Agent 结束。重启只恢复归属，不恢复执行凭据。新登录可以提交新轮次，不能恢复旧任务。`settled` 只表示活动结束，不表示业务操作成功；应使用返回的 `throughSeq` 查看历史。
+
+限定作用域的 `employee_frappe_read` 工具使用相同的三项身份服务操作，记录普通工具调用和结果。工具执行体检查绑定的 Agent 并复查登录；不可被允许规则覆盖的检查拒绝其他工具及无 Agent 身份的执行。部署拥有的共享预设不包含 shell、文件、子 Agent 或固定账号的 Frappe 客户端。请求不能选择预设、用户、站点或执行模式。身份服务读取仍受独立期限约束；本地取消不保证立即终止已经接受的远程读取。
+
 每个账号同时只运行一次读取。查询在线路上不超过 8192 字节，响应不超过 262144 字节；API 若配置了更小的响应上限，也同时生效。读取期间撤销登录会丢弃结果，新登录不能恢复旧请求。结果返回给已认证的 API 调用者，不追加到模型历史。此接口不是 Agent 工具，也不是具备完整审计的 AI 执行路径。
 
 ## 明确配置
 
-叠加配置读取 `DSH_SHARED_PUBLIC_ORIGIN`、`DSH_SHARED_IDENTITY_SOCKET` 和 `DSH_SHARED_OWNERS_DIRECTORY`。其源码固定请求数、扫描数、响应大小及期限上限。[插件 Config](../../../packages/api/session-controller/src/employee-access.ts)定义完整 API 契约；不得向员工开放配置或 Host 启动凭据。
+叠加配置读取 `DSH_SHARED_PUBLIC_ORIGIN`、`DSH_SHARED_IDENTITY_SOCKET`、`DSH_SHARED_OWNERS_DIRECTORY` 和 `DSH_SHARED_PRESET_ROOT`。最后一项指向叠加配置的 `presets` 目录；`promptPreset` 选择 `employee-shared-readonly`。其源码固定请求数、扫描数、响应大小及期限上限。[插件 Config](../../../packages/api/session-controller/src/employee-access.ts)定义完整 API 契约；不得向员工开放配置或 Host 启动凭据。
 
 身份服务通过 `--config` 指定由操作者拥有的私有 JSON 文件。`--check` 只验证配置，不开启监听。只接受以下精确字段：
 
@@ -72,10 +78,10 @@ Host 和写请求的 Origin 必须匹配指定 HTTPS 源。重复 Cookie、未�
 
 已有 Frappe 入口指向 `/sso`，本预览使用 `/employee/sso`。此变更不安装正式路由、共享员工界面或真实浏览器及 TLS 单点登录验收。普通 Host Cookie 仍可授权高权限 Host API；员工 Cookie 不具备该能力。不得将 Host 启动地址分发给共享员工。
 
-按 UID 绑定的只读业务代理仍将一个 UID 映射到一名员工，不能为共享进程内的不同员工授权。共享身份服务为每次读取独立选择账号。开放提示执行前，必须将每个排队的 Agent 轮次绑定到经过验证的调用者，在不把凭据放入模型输入的前提下连接读取桥接层，并记录实际工具调用及结果。写入需要独立的业务服务、流程检查和审批。不得接受模型指定的执行身份或回退到 Administrator。
+按 UID 绑定的只读业务代理仍将一个 UID 映射到一名员工，不能为共享进程内的不同员工授权。共享身份服务为每次读取独立选择账号。向员工开放前，认证 API 仍需真实浏览器、TLS 单点登录及线上站点验收。写入需要独立的业务服务、流程检查和审批。不得接受模型指定的执行身份或回退到 Administrator。
 
 需要在操作系统层隔离 Bench 所有权和签名材料时，应使用不同 UID。两种策略都必须保护直连端口及所有未按账号授权的 API，对代理日志中的票据查询脱敏，并验证负载下的资源上限。本预览不改变 Frappe DocType、业务记录、账号权限或正式服务。
 
 ## 开发备注
 
-[决策记录](../../../.agents/notes/implemented/architecture/2026-09-07-shared-session-ownership.zh.md)说明此预览为何尚不能替代独立员工执行。
+[归属决策](../../../.agents/notes/implemented/architecture/2026-09-07-shared-session-ownership.zh.md)和[请求所属轮次](../../../.agents/notes/implemented/architecture/2026-09-07-employee-authenticated-turns.zh.md)说明共享 API 的授权及部署限制。

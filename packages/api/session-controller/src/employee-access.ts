@@ -1,5 +1,5 @@
 /** Opt-in account-owned session and scoped read API for one shared Harness process.
- * No prompt, model tool execution, attachment, search, or global event endpoint is exposed.
+ * Optional read-only turns retain request-private identity through execution.
  */
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -14,11 +14,12 @@ import { z } from 'zod'
 import type { SessionController } from './index.ts'
 import { EmployeeAccessError, EmployeeIdentity, type EmployeePrincipal } from './employee-identity.ts'
 import { EmployeeOwners, sameEmployee } from './employee-owners.ts'
+import { EmployeeTurns } from './employee-turns.ts'
 
 /** Stable plugin name for the opt-in shared session API. */
 export const name = 'employee-session-access'
 /** Core services required by the shared session API. */
-export const inject = ['webServer', 'sessionController', 'sessions', 'sessionPersistence', 'tools']
+export const inject = ['webServer', 'sessionController', 'sessions', 'sessionPersistence', 'tools', 'agents', 'sessionProjections']
 
 /** Explicit deployment settings; this API has no production-default profile. */
 export interface Config {
@@ -36,6 +37,8 @@ export interface Config {
   maxOwnershipEntries: number
   /** Maximum serialized success response bytes. */
   maxResponseBytes: number
+  /** Explicit read-only Agent preset; omission keeps Agent execution disabled. */
+  promptPreset?: string
 }
 
 export const Config: schema<Config> = schema.object({
@@ -46,6 +49,7 @@ export const Config: schema<Config> = schema.object({
   maxRequests: schema.number().step(1).min(1).max(64),
   maxOwnershipEntries: schema.number().step(1).min(1).max(100000),
   maxResponseBytes: schema.number().step(1).min(1024).max(5000000),
+  promptPreset: schema.string(),
 })
 
 const COOKIE = '__Host-dsh-shared'
@@ -61,6 +65,7 @@ const readSchema = z.object({
   operation: z.enum(['frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
   arguments: z.record(z.string(), z.unknown()),
 }).strict()
+const promptSchema = z.object({ sessionId: pageSchema.shape.sessionId, text: z.string().min(1).max(6000) }).strict()
 
 /** Execute account-owned operations; authorization is repeated before releasing results. */
 export class EmployeeSessionAccess {
@@ -69,12 +74,14 @@ export class EmployeeSessionAccess {
    * @param owners - durable immutable owner records.
    * @param identity - current-account authority.
    * @param materialize - commit the exact created session before acknowledging it.
+   * @param execution - optional deployment-owned authenticated turn executor.
    */
   constructor(
     private readonly controller: Pick<SessionController, 'create' | 'list' | 'page'>,
     private readonly owners: EmployeeOwners,
     private readonly identity: Pick<EmployeeIdentity, 'authorize' | 'read'>,
     private readonly materialize: (sessionId: SessionId) => Promise<void>,
+    private readonly execution?: { preset: string; turns: EmployeeTurns },
   ) {}
 
   private async recheck(credential: string, principal: EmployeePrincipal, signal: AbortSignal): Promise<void> {
@@ -98,7 +105,8 @@ export class EmployeeSessionAccess {
       const sessionId = brandString<SessionId>('session-' + randomUUID())
       await this.owners.reserve(sessionId, principal)
       await this.recheck(credential, principal, signal)
-      result = await this.controller.create({ sessionId })
+      result = await this.controller.create({ sessionId,
+        ...(this.execution === undefined ? {} : { agentPreset: this.execution.preset }) })
       await this.materialize(sessionId)
     } else if (operation === 'list') {
       if (!emptySchema.safeParse(input).success) throw new EmployeeAccessError(400)
@@ -107,6 +115,12 @@ export class EmployeeSessionAccess {
       result = { items: list.items.filter(item => ids.has(item.sessionId)).map(item => ({
         sessionId: item.sessionId, updatedAt: item.updatedAt, running: item.running, blank: item.blank,
       })) }
+    } else if (operation === 'prompt' && this.execution !== undefined) {
+      const parsed = promptSchema.safeParse(input)
+      if (!parsed.success) throw new EmployeeAccessError(400)
+      const sessionId = brandString<SessionId>(parsed.data.sessionId)
+      await this.owners.assertOwner(sessionId, principal)
+      result = await this.execution.turns.prompt(sessionId, parsed.data.text, credential, principal, signal)
     } else if (operation === 'read') {
       const parsed = readSchema.safeParse(input)
       if (!parsed.success) throw new EmployeeAccessError(400)
@@ -178,22 +192,28 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }
   const owners = new EmployeeOwners(config.ownersDirectory, config.maxOwnershipEntries)
   await owners.initialize()
-  // Host credentials do not bind a Frappe actor to queued employee work.
-  ctx.on('agent/pre-step', ({ agent }, next) => owners.blocksExecution(agent.session.id)
-    ? Promise.resolve({ kind: 'reject' as const }) : next())
-  ctx.on('agent/request', ({ agent }, next) => {
-    if (owners.blocksExecution(agent.session.id)) throw new EmployeeAccessError(401)
-    return next()
-  })
-  ctx.effect(() => ctx.tools.guard(execution => execution.agent === undefined
-    || owners.blocksExecution(execution.agent.session.id)
-    ? 'Employee Agent execution is unavailable.' : undefined))
   const identity = new EmployeeIdentity(config.identitySocketPath, config.timeoutMs)
+  const execution = config.promptPreset === undefined ? undefined : {
+    preset: config.promptPreset,
+    turns: new EmployeeTurns(ctx, owners, identity, config.promptPreset, config.timeoutMs),
+  }
+  if (execution === undefined) {
+  // Host credentials do not bind a Frappe actor to queued employee work.
+    ctx.on('agent/pre-step', ({ agent }, next) => owners.blocksExecution(agent.session.id)
+      ? Promise.resolve({ kind: 'reject' as const }) : next())
+    ctx.on('agent/request', ({ agent }, next) => {
+      if (owners.blocksExecution(agent.session.id)) throw new EmployeeAccessError(401)
+      return next()
+    })
+    ctx.effect(() => ctx.tools.guard(execution => execution.agent === undefined
+    || owners.blocksExecution(execution.agent.session.id)
+      ? 'Employee Agent execution is unavailable.' : undefined))
+  }
   const access = new EmployeeSessionAccess(ctx.sessionController, owners, identity, async (sessionId) => {
     const session = ctx.sessions.get(sessionId)
     if (session === undefined) throw new EmployeeAccessError(503)
     await ctx.sessionPersistence.ensureMaterialized(session)
-  })
+  }, execution)
   const requests = new Map<Promise<void>, AbortController>()
   let closing = false
 
@@ -224,16 +244,18 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       if (url.search !== '') throw new EmployeeAccessError(400)
       if (url.pathname === '/employee/status' && req.method === 'GET') {
         await identity.authorize(login, abort.signal)
-        send(res, 200, JSON.stringify({ access: 'read-preview', agentExecution: false }))
+        send(res, 200, JSON.stringify({ access: execution === undefined ? 'read-preview' : 'read-only-turns',
+          agentExecution: execution !== undefined }))
         return
       }
       if (req.method !== 'POST' || req.headers.origin !== config.publicOrigin) throw new EmployeeAccessError(400)
       if (url.pathname === '/employee/logout') {
         await identity.request('logout', login, abort.signal)
+        execution?.turns.revoke(login)
         send(res, 204, undefined, { 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` })
         return
       }
-      const operation = /^\/employee\/session\/(create|list|page|read)$/u.exec(url.pathname)?.[1]
+      const operation = /^\/employee\/session\/(create|list|page|read|prompt)$/u.exec(url.pathname)?.[1]
       if (operation === undefined) throw new EmployeeAccessError(404)
       const result = await access.execute(operation, await body(req, abort.signal), login, abort.signal)
       const serialized = JSON.stringify(result)

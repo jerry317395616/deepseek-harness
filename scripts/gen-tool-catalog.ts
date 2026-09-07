@@ -74,6 +74,7 @@ import VmWorkflowEngine from '@deepseek-ai/dsh-workflow-worker-thread'
 import * as ToolRalph from '@deepseek-ai/dsh-tool-ralph'
 import * as ToolWorkflow from '@deepseek-ai/dsh-tool-workflow'
 import { githubSlug } from './verify-md-links.ts'
+import { employeeReadTool } from '../packages/api/session-controller/src/employee-turns.ts'
 
 /** Attachment seam marker that makes the attachments-conditional `read_image` schema harvestable. */
 class CatalogAttachmentStore extends AttachmentStore {
@@ -193,6 +194,19 @@ export interface ToolPackage {
  * guard proves it is exhaustive against the on-disk glob.
  */
 const TOOL_PACKAGES: ToolPackage[] = [
+  {
+    pkg: '@deepseek-ai/dsh-api-session-controller',
+    dir: 'session-controller',
+    source: 'packages/api/session-controller/src/employee-turns.ts',
+    requires: ['ctx.tools', 'request-owned employee identity authority'],
+    writes: ['tool/call', 'tool/result'],
+    mount(ctx) {
+      ctx.effect(() => ctx.tools.register(employeeReadTool(() =>
+        Promise.reject(new Error('catalog collection does not execute employee reads')), 30000)))
+      return Promise.resolve()
+    },
+    note: 'The employee-access subpath registers this tool only for the configured account-owned preset. The executor requires a live authenticated turn and revalidates its account around every read. Registration grants no account authority.',
+  },
   {
     pkg: '@deepseek-ai/dsh-tool-ask-user',
     dir: 'tool-ask-user',

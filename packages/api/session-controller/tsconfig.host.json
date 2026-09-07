@@ -20,6 +20,7 @@
     "src/model-selection-projection.ts",
     "src/skill-catalog.ts",
     "src/employee-access.ts",
+    "src/employee-turns.ts",
     "src/employee-identity.ts",
     "src/employee-owners.ts"
   ],
