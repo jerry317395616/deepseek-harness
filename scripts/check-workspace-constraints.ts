@@ -154,7 +154,11 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   // Native Frappe adapters and the official-docs indexer execute bounded
   // CPython helpers whose exact source is part of the published package.
   '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules': ['python/native_query.py'],
-  '@deepseek-ai/dsh-tool-native-bench-frappe': ['python/native_frappe_query.py'],
+  '@deepseek-ai/dsh-tool-native-bench-frappe': [
+    'python/native_frappe_query.py', 'python/employee_gateway.py', 'python/employee_proxy.py',
+    'python/requirements-employee-proxy.txt', 'python/native_actor_refresh.py',
+    'python/employee_read_broker.py', 'python/shared_identity.py',
+  ],
   '@deepseek-ai/dsh-tool-frappe-docs': ['python/frappe_docs_kb.py'],
   // The shipped preset compositions travel inside the roster package.
   '@deepseek-ai/dsh-agent-presets': ['presets'],

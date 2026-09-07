@@ -16,6 +16,8 @@ Login and replay state are bounded and process-local. A ticket is accepted once 
 
 The [deployment preflight](../../../../scripts/employee-deployment-preflight.py) records a read-only HTTPS and systemd baseline separately from employee authorization evidence. It rejects shared Bench identities, missing hardening observations and unbounded resources without reading secret files or raw service environments. Successful baseline checks never grant deployment approval: a private directory or systemd property cannot prove that an employee process cannot invoke a privileged helper, access signing material or reach another runtime. Independent browser, routing and hostile-process acceptance remain explicit unknowns rather than inferred successes.
 
+The [shared session ownership preview](2026-09-07-shared-session-ownership.md) begins a single-Harness alternative with account-scoped session APIs. It does not yet replace this dedicated-host execution contract or its deployment acceptance requirements.
+
 ## Alternatives considered
 
 **Shared host with list filtering.** Session listings are only one entrypoint. This does not restrict tool execution, settings changes or direct API requests.

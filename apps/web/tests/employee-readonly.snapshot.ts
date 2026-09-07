@@ -12,6 +12,8 @@ import {
   disposeEmployeeFixtures, logs, startEmployee,
 } from '../../cli/tests/profiles/employee-readonly/harness.ts'
 
+import { sharedLogin, startSharedAuthority } from '../../cli/tests/profiles/employee-readonly/shared.ts'
+
 const fixtureDir = fileURLToPath(new URL('../../../snapshots/web/employee-readonly', import.meta.url))
 const fixtureFile = join(fixtureDir, 'session.jsonl')
 const disposers: (() => Promise<unknown>)[] = []
@@ -24,9 +26,12 @@ it('replays an unavailable shell call with only business-reader schemas and unch
   const user = parseSessionLog(fixture).find(event => event.type === 'user/message')
   if (user?.type !== 'user/message') throw new Error('employee fixture lacks a user message')
   // Linux exercises the credential-free preset; socket reads have real-transport package tests.
+  const authority = process.platform === 'linux' ? await startSharedAuthority(disposers) : undefined
   const host = await startEmployee(disposers, 'employee-fixture', 'http://127.0.0.1:1',
-    undefined, fixtureFile, process.platform === 'linux')
-  const created = await host.rpc('session/create', { request: {} })
+    undefined, fixtureFile, process.platform === 'linux', authority)
+  const employee = authority === undefined ? undefined : await sharedLogin(host.origin, authority.ticket('teacher@example.test'))
+  const created = employee === undefined ? await host.rpc('session/create', { request: {} })
+    : { ok: true, value: await (await employee.raw('/employee/session/create')).json() as unknown }
   expect(created).toMatchObject({ ok: true, value: { agentPreset: 'employee-readonly' } })
   const id = (created.value as { sessionId: string }).sessionId
   expect(await host.rpc('session/prompt', { request: {
@@ -36,6 +41,15 @@ it('replays an unavailable shell call with only business-reader schemas and unch
     expect(await logs(host.home), host.safeLog()).toContain('"turn/end"')
   }, { timeout: 30000 })
   const raw = await logs(host.home)
+  if (authority !== undefined && employee !== undefined) {
+    const other = await sharedLogin(host.origin, authority.ticket('finance@example.test'))
+    expect((await other.raw('/employee/session/page', { sessionId: id, throughSeq: -1 })).status).toBe(404)
+    expect(await (await other.raw('/employee/session/list')).json()).toEqual({ items: [] })
+    expect(raw).not.toContain(employee.cookie.split('=')[1])
+    expect(raw).not.toContain('teacher@example.test')
+    await employee.raw('/employee/logout')
+    expect((await employee.raw('/employee/session/list')).status).toBe(401)
+  }
   const context = { sessionIds: [id], cwd: host.root }
   const [normalized] = normalizeSessionSnapshots([raw], context)
   if (normalized === undefined) throw new Error('employee session normalization failed')

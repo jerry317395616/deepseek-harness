@@ -1,0 +1,68 @@
+---
+description: "在一个共享 Harness 进程中验证账号所属会话，不开放员工 Agent 执行。"
+---
+
+# 共享员工会话预览
+
+[English](employee-shared.md) | 中文
+
+## 概要
+
+此可选叠加配置允许多个经过验证的 Frappe 账号在同一个 Harness 进程中创建会话、查看自己的列表和分页历史。它是 API 预览，不是共享聊天界面或正式部署。员工提示执行、工具、附件、搜索和全局事件流仍未开放。
+
+## 验证预览
+
+[共享叠加配置](../../../apps/cli/config/examples/employee-shared/cordis.yml)在干净的原生 Web 配置方案上，接在已有[只读组合](employee-readonly.zh.md)之后。[真实进程夹具](../../../apps/cli/tests/profiles/employee-readonly/employee-shared.expected.e2e.ts)提供临时目录和合成身份，为两个账号启动一个 Web 进程，并验证重启恢复。它不读取或修改线上 Frappe 站点。
+
+使用 Linux、Python 3.14 和已构建的代码。可用 `DSH_SHARED_IDENTITY_PYTHON` 选择测试身份服务的解释器，否则使用 `python3`。
+
+```sh
+DSH_EXAMPLE_MODE=lib pnpm exec vitest run --config vitest.expected.config.ts apps/cli/tests/profiles/employee-readonly/employee-shared.expected.e2e.ts
+DSH_EXAMPLE_MODE=lib DSH_SNAPSHOT=replay pnpm exec vitest run --config vitest.snapshot.config.ts apps/web/tests/employee-readonly.snapshot.ts
+```
+
+会话回放测试由可信 Host 测试驱动写入已有转录，再检查账号所属历史的访问权限。员工不能调用该驱动使用的提示接口。身份和登录凭据均不进入模型转录；此叠加配置不改变模型提示、工具 schema 或事件契约。
+
+## 身份与会话归属
+
+[身份服务](../../../packages/extensions/tool-native-bench-frappe/python/shared_identity.py)是独立的可信辅助进程，不是另一个 Harness 实例。它验证 Frappe 签发的一次性交接票据，并通过已有 Native Bench 只检查辅助程序复查当前已启用的系统用户。允许列表引用已有的逐账号身份配置。未知账号被拒绝，不会自动允许站点全部用户进入。
+
+身份服务通过私有 Unix 套接字，只接受内核确认的指定运行时 UID。正式配置拒绝将 root、身份服务 UID 或 Bench 所有者 UID 用作运行时身份。Harness 进程获得经过验证的 `{site,user}` 主体和不透明登录 Cookie，不获得签名密钥或 Bench 凭据。请求不能自行指定用户或所有者。
+
+[会话 API](../../../packages/api/session-controller/src/employee-access.ts)分配随机会话编号，在创建前发布不可变的归属记录，并在确认成功前持久化该会话。归属文件保存在模型日志之外的私有规范化目录。创建失败可能留下归属预留记录；列表只返回实际存在且属于当前账号的会话。没有归属的旧会话会被拒绝，不会分配给下一位访问者。
+
+| 接口 | 允许的行为 |
+|---|---|
+| `GET /employee/sso?token=…` | 将一次签名交接票据换成带 Secure、HttpOnly、SameSite=Strict 属性的 Cookie，并跳转到状态页 |
+| `GET /employee/status` | 复查登录状态并报告 `businessExecution: false` |
+| `POST /employee/logout` | 撤销登录并使 Cookie 过期 |
+| `POST /employee/session/create` | 只接受 `{}`，创建由服务端指定归属的会话 |
+| `POST /employee/session/list` | 只接受 `{}`，返回当前账号有大小上限的会话元数据 |
+| `POST /employee/session/page` | 先检查会话归属，再读取有上限的历史页 |
+
+Host 和写请求的 Origin 必须匹配指定 HTTPS 源。重复 Cookie、未知字段及不支持的操作被拒绝。会话结果返回前再次认证。退出、账号停用、依赖失败或过期会拒绝后续访问；身份服务重启会清空登录。超时、断开连接及插件销毁会取消并等待所属请求任务，但不能撤回已接受的会话创建。
+
+## 明确配置
+
+叠加配置读取 `DSH_SHARED_PUBLIC_ORIGIN`、`DSH_SHARED_IDENTITY_SOCKET` 和 `DSH_SHARED_OWNERS_DIRECTORY`。其源码固定请求数、扫描数、响应大小及期限上限。[插件 Config](../../../packages/api/session-controller/src/employee-access.ts)定义完整 API 契约；不得向员工开放配置或 Host 启动凭据。
+
+身份服务通过 `--config` 指定由操作者拥有的私有 JSON 文件。`--check` 只验证配置，不开启监听。只接受以下精确字段：
+
+| 字段 | 契约 |
+|---|---|
+| `version`, `socket_path`, `runtime_uid` | 版本 1、受保护且规范化的 Linux 套接字位置、一个独立运行时 UID |
+| `issuer`, `secret_file`, `identity_configs` | 精确站点、私有签名密钥文件、1–256 份已有账号检查配置 |
+| `session_seconds`, `max_sessions` | 60–28800 秒、1–4096 个同时有效的登录 |
+| `max_connections`, `timeout_seconds` | 1–64 条连接、每次操作 1–30 秒 |
+
+## 正式开放前
+
+已有 Frappe 入口指向 `/sso`，本预览使用 `/employee/sso`。此变更不安装正式路由、共享员工界面或真实浏览器及 TLS 单点登录验收。普通 Host Cookie 仍可授权高权限 Host API；员工 Cookie 不具备该能力。不得将 Host 启动地址分发给共享员工。
+
+按 UID 绑定的只读业务代理仍将一个 UID 映射到一名员工，不能为共享进程内的不同员工授权。开放提示执行前，必须将经过验证的会话主体绑定到每个排队的 Agent 轮次，通过不持有凭据的业务桥接层传递，并逐操作复查 Frappe 角色、记录、字段及流程权限。不得接受模型指定的执行身份或回退到 Administrator。
+
+共享运行时必须与 Bench 所有权和签名材料隔离，保护直连端口及所有未按账号授权的 API，对代理日志中的票据查询脱敏，并验证负载下的资源上限。本阶段不改变 Frappe DocType、业务记录、账号权限或正式服务。
+
+## 开发备注
+
+[决策记录](../../../.agents/notes/implemented/architecture/2026-09-07-shared-session-ownership.zh.md)说明此预览为何尚不能替代独立员工执行。

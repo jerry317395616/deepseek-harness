@@ -1,0 +1,14 @@
+# Apply after employee-readonly to a clean, private test profile.
+# This preview exposes only account-owned session creation, listing and history.
+# Employee cookies do not authorize the ordinary Host RPC or event carriers.
+- insert:
+    - id: employee-session-access
+      name: '@deepseek-ai/dsh-api-session-controller/employee-access'
+      config:
+        publicOrigin: !!js process.env.DSH_SHARED_PUBLIC_ORIGIN
+        identitySocketPath: !!js process.env.DSH_SHARED_IDENTITY_SOCKET
+        ownersDirectory: !!js process.env.DSH_SHARED_OWNERS_DIRECTORY
+        timeoutMs: 30000
+        maxRequests: 16
+        maxOwnershipEntries: 10000
+        maxResponseBytes: 1000000

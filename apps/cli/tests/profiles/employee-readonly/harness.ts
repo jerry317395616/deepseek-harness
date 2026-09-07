@@ -26,6 +26,7 @@ interface RpcReply {
 export async function startEmployee(
   disposers: (() => Promise<unknown>)[], label: string, baseURL: string, existingRoot?: string,
   replayFixture?: string, brokerMode = false,
+  sharedAccess?: { socketPath: string; publicOrigin: string },
 ) {
   const root = existingRoot ?? await mkdtemp(join(tmpdir(), 'dsh-employee-profile-'))
   if (existingRoot === undefined) disposers.push(() => rm(root, { recursive: true, force: true }))
@@ -67,7 +68,9 @@ export async function startEmployee(
     srcBin: join(repo, 'apps/cli/src/bin.ts'),
     tsconfigPath: join(repo, 'tsconfig.base.json'),
     sourceImport: 'tsx/esm',
-    configArgs: ['--profile', 'web', '--patch', overlay, '--patch', fixturePatch,
+    configArgs: ['--profile', 'web', '--patch', overlay,
+      ...(sharedAccess === undefined ? [] : ['--patch', join(repo, 'apps/cli/config/examples/employee-shared/cordis.yml')]),
+      '--patch', fixturePatch,
       '--no-open', '--host', '127.0.0.1', '--port', '0'],
   })
   // No inherited credentials, homes, model routes, or user Node hooks enter the child.
@@ -78,6 +81,10 @@ export async function startEmployee(
     DSH_HOME: home, DSH_AGENTS_HOME: join(root, 'agents'), DSH_TELEMETRY_DISABLED: '1',
     EMPLOYEE_FIXTURE_MODEL_KEY: 'synthetic-no-provider-key',
     DSH_EMPLOYEE_PRESET_ROOT: presets,
+    ...(sharedAccess === undefined ? {} : {
+      DSH_SHARED_IDENTITY_SOCKET: sharedAccess.socketPath, DSH_SHARED_PUBLIC_ORIGIN: sharedAccess.publicOrigin,
+      DSH_SHARED_OWNERS_DIRECTORY: join(home, 'employee-owners'),
+    }),
     DSH_EMPLOYEE_BENCH_ROOT: join(root, 'missing-bench'),
     DSH_EMPLOYEE_SITE: 'example.test',
     ...(brokerMode ? { DSH_EMPLOYEE_BROKER_SOCKET: join(root, 'absent-broker.sock') } : {
@@ -116,7 +123,7 @@ export async function startEmployee(
   if (cookie === undefined) throw new Error('employee browser credential exchange failed')
   const html = await (await fetch(origin, { headers: { cookie } })).text()
   expect(html).toContain('__DSH_BOOT__')
-  const proxy = await wrapEmployeeProxy(disposers, origin, cookie, url)
+  const proxy = sharedAccess === undefined ? await wrapEmployeeProxy(disposers, origin, cookie, url) : undefined
   const headers = proxy?.headers ?? {}
   if (proxy !== undefined) { origin = proxy.origin; cookie = proxy.cookie }
   async function raw(method: string, args: object = {}, otherCookie = cookie) {

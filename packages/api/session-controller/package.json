@@ -43,7 +43,11 @@
       "default": "./lib/typert.remote-client.js"
     },
     "./src/*": "./src/*",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./employee-access": {
+      "types": "./lib/types/employee-access.d.ts",
+      "default": "./lib/types/employee-access.js"
+    }
   },
   "dsh": {
     "client": {
@@ -149,6 +153,7 @@
     "@deepseek-ai/dsh-util-crypto": "workspace:^",
     "@deepseek-ai/dsh-util-time": "workspace:^",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:^",
-    "@deepseek-ai/dsh-workspace": "workspace:^"
+    "@deepseek-ai/dsh-workspace": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
   }
 }

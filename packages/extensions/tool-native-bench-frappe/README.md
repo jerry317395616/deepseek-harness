@@ -103,6 +103,10 @@ The [TypeScript socket client](src/broker.ts) is selected by `brokerSocketPath`,
 
 The client bounds the entire request and response, rejects invalid UTF-8/JSON, and returns fixed diagnostics without forwarding broker errors. Its deadline covers connection through response completion. Cancellation closes and awaits the local connection; it does not cancel an accepted server read. [Real-socket client tests](tests/broker-client.spec.ts) cover these behaviors. OS users, protected filesystem access, assertion renewal, service activation and authenticated browser acceptance remain deployment work.
 
+### Shared identity authority preview
+
+The optional [shared identity authority](python/shared_identity.py) authenticates several allowlisted Frappe accounts for one distinct Harness UID. It exchanges signed handoffs for opaque logins and rechecks the existing Native Bench identity helper in check-only mode. The [shared session guide](../../../docs/user/guide/employee-shared.md) owns configuration and the separate account-owned API. This helper grants no business access: the UID-bound read broker above remains single-employee, and cannot be reused as per-account authorization inside one shared runtime. Shared Agent execution and production SSO routing remain pending.
+
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench assertion renewal
 

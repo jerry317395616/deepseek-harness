@@ -48,6 +48,7 @@
       "@deepseek-ai/dsh-api-gateway/invariant": ["./packages/api/gateway/src/invariant.ts"],
       "@deepseek-ai/dsh-api-gateway/types": ["./packages/api/gateway/src/types.ts"],
       "@deepseek-ai/dsh-api-session-controller": ["./packages/api/session-controller/src/index.ts"],
+      "@deepseek-ai/dsh-api-session-controller/employee-access": ["./packages/api/session-controller/src/employee-access.ts"],
       "@deepseek-ai/dsh-api-session-controller/client": ["./packages/api/session-controller/src/client/index.ts"],
       "@deepseek-ai/dsh-api-session-controller/invariant": ["./packages/api/session-controller/src/invariant.ts"],
       "@deepseek-ai/dsh-api-session-controller/types": ["./packages/api/session-controller/src/types.ts"],

@@ -33,6 +33,8 @@
     "python/employee_proxy.py",
     "python/requirements-employee-proxy.txt",
     "python/native_actor_refresh.py",
+    "python/employee_read_broker.py",
+    "python/shared_identity.py",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
