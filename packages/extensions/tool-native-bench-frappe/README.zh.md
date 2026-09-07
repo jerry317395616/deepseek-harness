@@ -89,6 +89,17 @@ kind: "package-reference"
 
 只读[部署预检程序](../../../scripts/employee-deployment-preflight.py)检查固定的 Child/Harness HTTPS 入口和本机 systemd 运行时，不登录、不读取响应正文、不收集凭据。在部署根目录运行 `native-bench/env/bin/python -B deepseek-harness/scripts/employee-deployment-preflight.py`；默认目标为用户服务 `ione-harness.service`，可通过明确的 `--unit` 和 `--scope user|system` 参数检查候选运行时。它报告经证书验证的登录跳转、进程身份分离、选定的沙箱设置和有限资源上限。观测缺失、变化或失败时不予通过。程序始终以退出码 2 结束并报告 `deployment_approved: false`：即使自动基线通过，仍需独立验收路由、登录后的浏览器行为、文件系统及凭据隔离、高权限辅助程序分离，以及故障和负载行为。它不安装或实施限制，不检查 nginx 路由，也不认证多用户部署。
 
+<a id="employee-read-broker"></a>
+### 员工只读业务代理后端
+
+可选的 Linux [只读代理](python/employee_read_broker.py)将可信 Bench 读取进程与调用者分离，并通过 Unix 套接字的 `SO_PEERCRED` 识别调用者。私有配置将每个已存在且独立的 Linux UID 绑定到一份私有续期配置及 DocType 允许列表。拒绝 root、代理自身 UID、Bench 所有者 UID、重复员工和受保护的 DocType。部署方负责套接字的规范化目录及全部上级目录；这些目录不得允许组或其他用户写入，也不得属于无关用户。套接字权限为 0666；目录位置控制可达性，内核提供的 UID 绑定控制授权。
+
+每条连接只接受一个以换行结束的 JSON 对象，随后调用方关闭写入方向：整数 `version: 1`、`operation` 和 `arguments`。仅接受 `frappe_describe_doctype`、`frappe_list_documents` 和 `frappe_get_document`。身份、路径、可执行程序和范围不是请求字段。代理以固定 Frappe 账号调用既有业务读取程序，再执行续期程序的身份检查，随后才返回结果。身份配置变化、检查失败、无效输入或结果超限均返回固定拒绝信息；不转发部署或工作进程诊断。
+
+[配置解析器](python/employee_read_broker.py)要求明确的连接数、输入和输出上限、输入输出期限及每个工作进程的执行期限。每个 UID 同时只能执行一个请求；超限连接会关闭。工作进程使用最小环境变量集，输出大小受到限制。超时或取消会终止并回收仍在运行的工作进程；服务关闭时停止接收并等待所属任务结束。仅断开连接不会取消已接受的读取。[代理测试](tests/test_employee_read_broker.py)不使用生产数据，覆盖真实本机套接字、配置命令行、子进程限制和清理。
+
+此后端尚未接入 TypeScript 客户端或员工配置方案。它不创建 Linux 用户，不限制 Bench 权限，不调度身份断言续期，也不改变服务。既有客户端仍直接启动 Bench Python。生产部署需要代理客户端、独立运行时 UID、受保护的 Bench 与配置访问，以及登录后的浏览器验收；后端测试不能认证这些隔离措施。
+
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench 身份断言续期
 

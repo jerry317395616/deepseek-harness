@@ -14,6 +14,8 @@ Ship an opt-in [employee overlay](../../../../apps/cli/config/examples/employee-
 
 Each employee deployment owns a separate process, workspace, state roots, browser credential, and signed Frappe identity. Document access remains subject to the adapter's existing signed-identity and Frappe permission checks. The overlay is trusted code and must not be combined with unreviewed maintenance patches.
 
+An optional [Linux read broker](../../../../packages/extensions/tool-native-bench-frappe/python/employee_read_broker.py) provides the trusted backend for UID-pinned reads. It rejects caller-selected identity and write operations, delegates record permissions to the existing reader, and checks account status before returning data. It is not mounted by the overlay or wired into the client; OS provisioning and credential isolation remain independent requirements.
+
 ## Alternatives considered
 
 **Use the stock standard preset with fewer buttons.** Model tools and direct Remote calls retain authority independently of browser presentation.

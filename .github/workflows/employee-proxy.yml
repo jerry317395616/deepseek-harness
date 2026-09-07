@@ -48,6 +48,8 @@ jobs:
           echo "DSH_EMPLOYEE_PROXY_PYTHON=$proxy_venv/bin/python" >> "$GITHUB_ENV"
       - run: pnpm install --frozen-lockfile
       - run: pnpm run build
+      - name: Verify read broker identity and lifecycle
+        run: "python -B -m unittest discover -s packages/extensions/tool-native-bench-frappe/tests -p test_employee_read_broker.py -v"
       - name: Verify transport revocation
         run: "$DSH_EMPLOYEE_PROXY_PYTHON -B -m unittest discover -s packages/extensions/tool-native-bench-frappe/tests -p test_employee_proxy.py -v"
       - name: Verify employee operator and deployment guards
