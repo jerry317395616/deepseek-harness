@@ -105,7 +105,7 @@ kind: "package-reference"
 
 ### 共享身份服务预览
 
-可选的[共享身份服务](python/shared_identity.py)为一个独立的 Harness UID 验证允许列表中的多个 Frappe 账号。它将签名交接票据换成不透明登录，并以只检查模式复查已有 Native Bench 身份辅助程序。[共享会话指南](../../../docs/user/guide/employee-shared.zh.md)定义配置及独立的账号所属 API。此辅助程序不授予业务访问权限：上面的 UID 绑定只读代理仍只服务一名员工，不能用于一个共享运行时内的逐账号授权。共享 Agent 执行和正式单点登录路由仍待完成。
+可选的[共享身份服务](python/shared_identity.py)为一个独立的 Harness UID 验证允许列表中的多个 Frappe 账号。它将签名交接票据换成不透明登录，并以只检查模式复查已有 Native Bench 身份辅助程序。明确的读取范围允许通过登录所属固定账号的身份断言和已有 ORM 读取程序执行 describe/list/get；未知身份字段、写入和范围违规均被拒绝。[共享会话指南](../../../docs/user/guide/employee-shared.zh.md)定义配置及独立的账号所属 API。按 UID 绑定的代理仍只服务一名员工，不能在共享运行时内选择账号。共享 Agent 执行和正式单点登录路由仍待完成。
 
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench 身份断言续期

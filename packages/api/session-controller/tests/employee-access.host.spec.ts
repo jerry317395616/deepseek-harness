@@ -37,7 +37,8 @@ async function fixture() {
     const principal = accounts.get(cookie)
     if (principal === undefined) throw new EmployeeAccessError(401)
     return principal
-  }) }
+  }),
+  read: vi.fn(async (_cookie: string, _operation: string, _arguments: Record<string, unknown>, _signal: AbortSignal) => ({ rows: [] })) }
   const materialize = vi.fn(async () => {})
   const access = new EmployeeSessionAccess(controller, owners, identity, materialize)
   return { root, owners, accounts, controller, rows, identity, access, materialize }
@@ -88,6 +89,24 @@ describe.skipIf(process.platform !== 'linux')('shared session access', () => {
     await expect(restored.reserve(created.sessionId, b)).rejects.toMatchObject({ code: 'EEXIST' })
     await restored.assertOwner(created.sessionId, a)
     expect((await readdir(f.root)).filter(name => name.endsWith('.tmp'))).toEqual([])
+  })
+
+  it('binds business reads to the owned session and opaque login, with no caller-selected identity', async () => {
+    const f = await fixture()
+    const created = await f.access.execute('create', {}, 'a', signal) as { sessionId: SessionId }
+    const input = { sessionId: created.sessionId, operation: 'frappe_list_documents', arguments: { doctype: 'Student' } }
+    expect(await f.access.execute('read', input, 'a', signal)).toEqual({ rows: [] })
+    expect(f.identity.read).toHaveBeenCalledWith('a', input.operation, input.arguments, signal)
+    await expect(f.access.execute('read', input, 'b', signal)).rejects.toMatchObject({ status: 404 })
+    for (const invalid of [{ ...input, user: b.user }, { ...input, operation: 'frappe_apply_document_update' }, {}]) {
+      await expect(f.access.execute('read', invalid, 'a', signal)).rejects.toMatchObject({ status: 400 })
+    }
+    expect(f.identity.read).toHaveBeenCalledTimes(1)
+    f.identity.read.mockImplementationOnce(async () => {
+      f.accounts.delete('a')
+      return { rows: [] }
+    })
+    await expect(f.access.execute('read', input, 'a', signal)).rejects.toMatchObject({ status: 401 })
   })
 
   it('does not release results after logout or account reassignment during an operation', async () => {

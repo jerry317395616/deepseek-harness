@@ -2,7 +2,8 @@
 
 Only the configured runtime UID may exchange tickets or resolve login sessions.
 The runtime receives an identity, never the signing key or Bench credentials.
-This auxiliary service neither launches Harness nor grants business access.
+Scoped reads use the login's pinned Frappe identity and current ORM permissions.
+This auxiliary service neither launches Harness nor grants write access.
 """
 from __future__ import annotations
 
@@ -12,6 +13,7 @@ from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import hashlib
 import hmac
+import json
 import os
 from pathlib import Path
 import pwd
@@ -25,11 +27,18 @@ import sys
 import time
 
 from employee_gateway import b64decode, integer, private_bytes
-from employee_read_broker import bounded_process, strict_json, trusted_directory
+from employee_read_broker import Binding, NativeExecutor, OPERATIONS, bounded_process, strict_json, trusted_directory
 from native_actor_refresh import Configuration as IdentityConfiguration
+from native_frappe_query import normalize_arguments
 
 LIMIT = 8192
+READ_LIMIT = 262144
 DENIED = b'{"ok":false}\n'
+READ_FIELDS = {
+    "frappe_describe_doctype": {"doctype"},
+    "frappe_list_documents": {"doctype", "fields", "filters", "order_by", "limit", "start"},
+    "frappe_get_document": {"doctype", "name", "fields"},
+}
 
 
 @dataclass(frozen=True)
@@ -43,6 +52,7 @@ class Configuration:
     max_sessions: int
     max_connections: int
     timeout_seconds: int
+    read_doctypes: tuple[str, ...] = ()
 
     @classmethod
     def load(cls, path):
@@ -51,7 +61,7 @@ class Configuration:
         raw = strict_json(private_bytes(path, 65536))
         fields = {"version", "socket_path", "runtime_uid", "issuer", "secret_file",
                   "identity_configs", "session_seconds", "max_sessions",
-                  "max_connections", "timeout_seconds"}
+                  "max_connections", "timeout_seconds", "read_doctypes"}
         if (not isinstance(raw, dict) or set(raw) != fields
                 or type(raw["version"]) is not int or raw["version"] != 1):
             raise ValueError("invalid shared identity configuration")
@@ -79,11 +89,40 @@ class Configuration:
                     or uid == identity.bench_root.stat().st_uid):
                 raise ValueError("invalid account association")
             identities[identity.user] = (source, identity)
+        scope = raw["read_doctypes"]
+        if (not isinstance(scope, list) or len(scope) > 64
+                or any(not isinstance(name, str) for name in scope)
+                or len(set(scope)) != len(scope)):
+            raise ValueError("invalid shared read scope")
+        for name in scope:
+            if normalize_arguments("frappe_describe_doctype", {"doctype": name})["doctype"] != name:
+                raise ValueError("invalid shared read scope")
         return cls(target, uid, issuer, secret, identities,
                    integer(raw["session_seconds"], 60, 28800),
                    integer(raw["max_sessions"], 1, 4096),
                    integer(raw["max_connections"], 1, 64),
-                   integer(raw["timeout_seconds"], 1, 30))
+                   integer(raw["timeout_seconds"], 1, 30), tuple(scope))
+
+
+@dataclass(frozen=True)
+class ReadExecutionLimits:
+    operation_seconds: int
+    max_input_bytes: int = 16384
+    max_output_bytes: int = READ_LIMIT
+
+
+class NativeRead:
+    """Select a pinned employee assertion after login resolution, never by runtime UID."""
+
+    def __init__(self, config):
+        self.config = config
+        self.executor = NativeExecutor(ReadExecutionLimits(config.timeout_seconds))
+
+    async def __call__(self, user, operation, arguments):
+        source, identity = self.config.identities[user]
+        binding = Binding(self.config.runtime_uid, source, identity, self.config.read_doctypes)
+        result = await self.executor(binding, operation, arguments)
+        return result["result"]
 
 
 class NativeEnabledCheck:
@@ -108,10 +147,11 @@ class NativeEnabledCheck:
 class SharedIdentity:
     """Single-event-loop login owner; async checks cannot revive revoked logins."""
 
-    def __init__(self, config, enabled, clock=time.time):
+    def __init__(self, config, enabled, clock=time.time, *, read=None):
         self.config, self.enabled, self.clock = config, enabled, clock
         self.started = clock()
         self.sessions, self.used = {}, {}
+        self.read, self.readers = read, set()
 
     def prune(self):
         now = self.clock()
@@ -166,6 +206,29 @@ class SharedIdentity:
                 or type(request["version"]) is not int or request["version"] != 1):
             raise ValueError("invalid request")
         operation, value = request["operation"], request["value"]
+        if operation == "read":
+            if (self.read is None or not isinstance(value, dict)
+                    or set(value) != {"credential", "operation", "arguments"}
+                    or not isinstance(value["operation"], str) or value["operation"] not in OPERATIONS
+                    or not isinstance(value["arguments"], dict)
+                    or set(value["arguments"]) - READ_FIELDS[value["operation"]]):
+                raise ValueError("invalid shared read")
+            arguments = normalize_arguments(value["operation"], value["arguments"])
+            if arguments["doctype"] not in self.config.read_doctypes:
+                raise ValueError("read outside configured scope")
+            principal = await self.resolve(value["credential"])
+            if principal is None or principal["user"] in self.readers:
+                raise ValueError("read unavailable")
+            user = principal["user"]
+            self.readers.add(user)
+            try:
+                result = await self.read(user, value["operation"], arguments)
+                # A replacement login for the same user cannot revive this request.
+                if await self.resolve(value["credential"]) != principal:
+                    raise ValueError("login revoked during read")
+                return result
+            finally:
+                self.readers.remove(user)
         if operation == "login":
             user, expiry = self.ticket_user(value)
             if await self.enabled(user) is not True or expiry <= self.clock():
@@ -216,9 +279,8 @@ class IdentityServer:
                 if len(raw) > LIMIT or await reader.read(1):
                     raise ValueError("one bounded request required")
                 result = await self.authority.execute(strict_json(raw))
-                import json
                 output = json.dumps({"ok": True, "result": result}, ensure_ascii=False).encode() + b"\n"
-                if len(output) > LIMIT:
+                if len(output) > READ_LIMIT:
                     raise ValueError("result exceeds limit")
                 writer.write(output)
                 await writer.drain()
@@ -278,7 +340,7 @@ async def serve(config):
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, stopped.set)
     try:
-        async with IdentityServer(SharedIdentity(config, NativeEnabledCheck(config))).listening():
+        async with IdentityServer(SharedIdentity(config, NativeEnabledCheck(config), read=NativeRead(config))).listening():
             print("shared identity authority ready", flush=True)
             await stopped.wait()
     finally:

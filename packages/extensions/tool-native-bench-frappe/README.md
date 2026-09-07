@@ -105,7 +105,7 @@ The client bounds the entire request and response, rejects invalid UTF-8/JSON, a
 
 ### Shared identity authority preview
 
-The optional [shared identity authority](python/shared_identity.py) authenticates several allowlisted Frappe accounts for one distinct Harness UID. It exchanges signed handoffs for opaque logins and rechecks the existing Native Bench identity helper in check-only mode. The [shared session guide](../../../docs/user/guide/employee-shared.md) owns configuration and the separate account-owned API. This helper grants no business access: the UID-bound read broker above remains single-employee, and cannot be reused as per-account authorization inside one shared runtime. Shared Agent execution and production SSO routing remain pending.
+The optional [shared identity authority](python/shared_identity.py) authenticates several allowlisted Frappe accounts for one distinct Harness UID. It exchanges signed handoffs for opaque logins and rechecks the existing Native Bench identity helper in check-only mode. An explicit read scope permits describe/list/get calls through the login's pinned account assertion and the existing ORM reader; unknown identity fields, writes and scope violations are denied. The [shared session guide](../../../docs/user/guide/employee-shared.md) owns configuration and the separate account-owned API. The UID-bound broker remains single-employee and cannot choose accounts inside a shared runtime. Shared Agent execution and production SSO routing remain pending.
 
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench assertion renewal

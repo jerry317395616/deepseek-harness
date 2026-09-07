@@ -1,5 +1,5 @@
 # Apply after employee-readonly to a clean, private test profile.
-# This preview exposes only account-owned session creation, listing and history.
+# This preview exposes account-owned sessions and authority-scoped reads, not prompts.
 # Employee cookies do not authorize the ordinary Host RPC or event carriers.
 - insert:
     - id: employee-session-access

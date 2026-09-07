@@ -3,7 +3,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import WebSocket from 'ws'
-import { disposeEmployeeFixtures, startEmployee } from './harness.ts'
+import { disposeEmployeeFixtures, logs, startEmployee } from './harness.ts'
 import { sharedLogin, sharedRequest, startSharedAuthority } from './shared.ts'
 
 const disposers: (() => Promise<unknown>)[] = []
@@ -31,6 +31,30 @@ describe.skipIf(process.platform !== 'linux')('single Harness account-owned sess
     expect(JSON.stringify(listing)).not.toContain(bId)
     expect((await b.raw('/employee/session/page', { sessionId: aId, throughSeq: -1 })).status).toBe(404)
     expect((await a.raw('/employee/session/page', { sessionId: aId, throughSeq: -1 })).status).toBe(200)
+    const readPath = '/employee/session/read'
+    const query = { operation: 'frappe_list_documents', arguments: { doctype: 'Student' } }
+    const [teacherRead, financeRead] = await Promise.all([
+      a.raw(readPath, { sessionId: aId, ...query }), b.raw(readPath, { sessionId: bId, ...query }),
+    ])
+    expect(teacherRead.status).toBe(200)
+    expect(financeRead.status).toBe(200)
+    expect(await teacherRead.json()).toEqual({ doctype: 'Student', rows: [{ name: 'synthetic-teacher' }] })
+    expect(await financeRead.json()).toEqual({ doctype: 'Student', rows: [{ name: 'synthetic-finance' }] })
+    expect((await b.raw(readPath, { sessionId: aId, ...query })).status).toBe(404)
+    expect(await (await a.raw(readPath, { sessionId: aId, operation: 'frappe_get_document',
+      arguments: { doctype: 'Student', name: 'synthetic-finance' } })).json())
+      .toEqual({ doctype: 'Student', name: 'synthetic-finance', document: null })
+    expect((await a.raw(readPath, { sessionId: aId, ...query, user: 'finance@example.test' })).status).toBe(400)
+    for (const arguments_ of [{ doctype: 'Student', user: 'Administrator' }, { doctype: 'User' },
+      { doctype: 'Student', ignore_permissions: true }, { doctype: 'Sales Invoice' }]) {
+      expect((await a.raw(readPath, { sessionId: aId, operation: query.operation, arguments: arguments_ })).status).toBe(401)
+    }
+    expect((await a.raw(readPath, { sessionId: aId, operation: 'frappe_apply_document_update',
+      arguments: { doctype: 'Student' } })).status).toBe(400)
+    const transcript = await logs(host.home)
+    expect(transcript).not.toContain('synthetic-teacher')
+    expect(transcript).not.toContain('synthetic-finance')
+    expect(transcript).not.toContain(a.cookie.split('=')[1])
     for (const input of [{ sessionId: bId }, { user: 'finance@example.test' }, { agentPreset: 'standard' }]) {
       expect((await a.raw('/employee/session/create', input)).status).toBe(400)
     }
@@ -69,10 +93,13 @@ describe.skipIf(process.platform !== 'linux')('single Harness account-owned sess
     const again = await sharedLogin(restarted.origin, authority.ticket('teacher@example.test'))
     expect(await (await again.raw('/employee/session/list')).json()).toMatchObject({ items: [{ sessionId: aId }] })
     expect((await again.raw('/employee/session/page', { sessionId: bId, throughSeq: -1 })).status).toBe(404)
+    expect((await again.raw(readPath, { sessionId: aId, ...query })).status).toBe(200)
     await again.raw('/employee/logout')
     expect((await again.raw('/employee/session/list')).status).toBe(401)
+    expect((await again.raw(readPath, { sessionId: aId, ...query })).status).toBe(401)
     const finance = await sharedLogin(restarted.origin, authority.ticket('finance@example.test'))
     await authority.disable('finance@example.test')
     expect((await finance.raw('/employee/session/list')).status).toBe(401)
+    expect((await finance.raw(readPath, { sessionId: bId, ...query })).status).toBe(401)
   })
 })

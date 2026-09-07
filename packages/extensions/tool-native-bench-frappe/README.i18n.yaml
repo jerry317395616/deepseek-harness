@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/tool-native-bench-frappe/README.md
-README.md: e2e53892c2965413850d6283c6355ac590ed785e
-README.zh.md: 6c82a5de29604d4c7ff312667fba1cde972b1a45
+README.md: 8a0331a85e7be3db83649443c7b7a9799bd7997c
+README.zh.md: 13c8f156f4aebd2a76503b65086082f19192561d

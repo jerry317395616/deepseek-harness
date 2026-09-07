@@ -27,13 +27,13 @@ export class EmployeeIdentity {
   constructor(private readonly socketPath: string, private readonly timeoutMs: number) {}
 
   /**
-   * Exchange or resolve an opaque login credential. No caller-selected account is accepted.
+   * Exchange a login, resolve identity or request a scoped read. No caller-selected account is accepted.
    * @param operation - authority operation, never a Frappe business method.
-   * @param value - handoff or opaque login credential; must not enter logs.
+   * @param value - handoff, opaque login or credential-bound read request; must not enter logs.
    * @param signal - local cancellation, which cannot undo accepted remote work.
    * @returns parsed result; callers validate the operation-specific fields.
    */
-  async request(operation: 'login' | 'authorize' | 'logout', value: string, signal: AbortSignal): Promise<unknown> {
+  async request(operation: 'login' | 'authorize' | 'logout' | 'read', value: unknown, signal: AbortSignal): Promise<unknown> {
     const payload = JSON.stringify({ version: 1, operation, value }) + '\n'
     if (Buffer.byteLength(payload) > 8192 || signal.aborted) throw new EmployeeAccessError(401)
     return new Promise((resolve, reject) => {
@@ -51,7 +51,7 @@ export class EmployeeIdentity {
       socket.once('end', () => { ended = true })
       socket.on('data', (chunk: Buffer) => {
         size += chunk.length
-        if (size > 8192) cancel()
+        if (size > (operation === 'read' ? 262144 : 8192)) cancel()
         else chunks.push(chunk)
       })
       socket.once('close', () => {
@@ -79,5 +79,17 @@ export class EmployeeIdentity {
     const parsed = principalSchema.safeParse(await this.request('authorize', credential, signal))
     if (!parsed.success) throw new EmployeeAccessError(401)
     return parsed.data
+  }
+
+  /**
+   * Read through the login's pinned Frappe identity; the authority validates scope and permissions.
+   * @param credential - request-owned opaque login; never persisted or supplied by a model.
+   * @param operation - one of the authority's three read-only operations.
+   * @param arguments_ - untrusted structured query without any actor or site selector.
+   * @param signal - request lifetime; remote read workers also have a fixed deadline.
+   * @returns bounded result after the authority revalidates the same login.
+   */
+  async read(credential: string, operation: string, arguments_: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+    return this.request('read', { credential, operation, arguments: arguments_ }, signal)
   }
 }

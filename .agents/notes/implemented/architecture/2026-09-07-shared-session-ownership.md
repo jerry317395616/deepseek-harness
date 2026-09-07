@@ -10,9 +10,11 @@ The user requests one shared Harness rather than one process per employee. A Hos
 
 ## Decision
 
-Add an explicit session-only preview: a trusted Unix-socket authority verifies signed handoffs and current enabled accounts, while the Session Controller subpath assigns immutable `{site,user}` ownership outside model logs. Creation persists the exact session before success; list and page verify ownership and recheck login before returning data. Missing ownership, malformed input and authority failure deny access.
+Use an explicit account-owned API preview: a trusted Unix-socket authority verifies signed handoffs and current enabled accounts, while the Session Controller subpath assigns immutable `{site,user}` ownership outside model logs. Creation persists the exact session before success; list, page and scoped reads verify ownership and recheck login before returning data. Missing ownership, malformed input and authority failure deny access.
 
 Employee credentials authorize only this API. The ordinary Host API and global event stream retain Host authentication. No employee prompt endpoint is exposed until queued Agent work and business execution can preserve the verified caller. A disabled account check is not a substitute for Frappe business permissions.
+
+For read requests, the authority selects the existing pinned account configuration from the resolved login, then reuses the native reader's signed identity and ORM permission checks. The shared UID admits the runtime process but never selects the employee. Explicit scope, strict arguments, one active read per account and bounded replies limit this API. Post-read login revalidation prevents logout, disablement or expiry from releasing in-flight results; replacement logins do not revive old requests.
 
 ## Alternatives considered
 
@@ -26,7 +28,7 @@ Employee credentials authorize only this API. The ordinary Host API and global e
 
 The focused HTTP/ownership suite covers both accounts, forged ownership, unowned legacy sessions, immutable files, response limits, timeout, client disconnect and disposal. Python tests exercise replay races, logout during revalidation, disabled accounts, expiry, restart and real socket teardown. The real-process fixture admits two accounts to one Web process; the existing recorded-session replay verifies owned history without changing model-visible contracts.
 
-The [guide](../../../../docs/user/guide/employee-shared.md) owns configuration and acceptance boundaries. Shared employee UI, production SSO routing, per-turn caller binding, authorized business execution and browser/load acceptance remain pending. No production route, service, Frappe account, record or DocType changed.
+The [guide](../../../../docs/user/guide/employee-shared.md) owns configuration and acceptance boundaries. The read tests exercise concurrent accounts, actor forgery, scoped denial, revocation during reads, cancellation and the shared runtime's restart. Business results in these fixtures are synthetic; the native adapter reuses the existing signed-reader tests, not live site acceptance. Shared employee UI, production SSO routing, per-turn caller binding, audited AI execution and browser/load acceptance remain pending. No production route, service, Frappe account, record or DocType changed.
 
 ## Supersession audit
 

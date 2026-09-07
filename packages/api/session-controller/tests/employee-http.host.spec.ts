@@ -127,13 +127,17 @@ describe.skipIf(process.platform !== 'linux')('shared HTTP preview', () => {
     const login = await f.call('/employee/sso?token=synthetic')
     expect(login.status).toBe(303)
     expect(login.cookie).toContain('HttpOnly; Secure; SameSite=Strict')
-    expect((await f.call('/employee/status')).status).toBe(200)
+    const status = await f.call('/employee/status')
+    expect(status.status).toBe(200)
+    expect(JSON.parse(status.text)).toEqual({ access: 'read-preview', agentExecution: false })
     const created = await f.call('/employee/session/create', '{}')
     expect(created.status).toBe(200)
     const id = (JSON.parse(created.text) as { sessionId: string }).sessionId
     expect((await f.call('/employee/session/list', '{}')).text).toContain(id)
     expect((await f.call('/employee/session/page', JSON.stringify({ sessionId: id, throughSeq: -1,
       maxMessages: 5, beforeSeq: 1 }))).status).toBe(200)
+    expect((await f.call('/employee/session/read', JSON.stringify({ sessionId: id,
+      operation: 'frappe_describe_doctype', arguments: { doctype: 'Student' } }))).status).toBe(200)
     expect((await f.call('/employee/logout', '{}')).status).toBe(204)
     expect((await f.call('/employee/status')).status).toBe(401)
     await f.release()
@@ -176,6 +180,13 @@ describe.skipIf(process.platform !== 'linux')('shared HTTP preview', () => {
     cancelled.abort()
     await expect(authority.authorize('opaque', cancelled.signal)).rejects.toMatchObject({ status: 401 })
     await expect(authority.request('login', 'x'.repeat(8193), new AbortController().signal)).rejects.toMatchObject({ status: 401 })
+    const available = new EmployeeIdentity(f.socketPath, 5000)
+    f.setReply(JSON.stringify({ ok: true, result: { rows: ['x'.repeat(10000)] } }))
+    expect(await available.read('opaque', 'frappe_list_documents', { doctype: 'Student' }, new AbortController().signal))
+      .toMatchObject({ rows: ['x'.repeat(10000)] })
+    f.setReply('x'.repeat(262145))
+    await expect(available.read('opaque', 'frappe_list_documents', { doctype: 'Student' }, new AbortController().signal))
+      .rejects.toMatchObject({ status: 401 })
   })
 
   it('fails closed for malformed deployment and missing created sessions', async () => {

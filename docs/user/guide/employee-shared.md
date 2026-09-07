@@ -8,7 +8,7 @@ English | [中文](employee-shared.zh.md)
 
 ## Summary
 
-This opt-in overlay admits multiple verified Frappe accounts to one Harness process for session creation, listing and history paging. It is an API preview, not a shared chat interface or a production deployment. Employee prompt execution, tools, attachments, search and global event streams remain unavailable.
+This opt-in overlay admits multiple verified Frappe accounts to one Harness process for session creation, listing, history paging and scoped Frappe reads. It is an API preview, not a shared chat interface or a production deployment. Employee prompt execution, model tools, attachments, search and global event streams remain unavailable.
 
 ## Evaluate the preview
 
@@ -34,13 +34,18 @@ The [session API](../../../packages/api/session-controller/src/employee-access.t
 | Endpoint | Admitted behavior |
 |---|---|
 | `GET /employee/sso?token=…` | Exchange one signed handoff for a Secure, HttpOnly, SameSite=Strict cookie; redirect to status |
-| `GET /employee/status` | Revalidate login and report `businessExecution: false` |
+| `GET /employee/status` | Revalidate login and report `access: read-preview`, `agentExecution: false` |
 | `POST /employee/logout` | Revoke login and expire its cookie |
 | `POST /employee/session/create` | Accept only `{}` and create a server-owned session |
 | `POST /employee/session/list` | Accept only `{}` and return bounded metadata for this account |
 | `POST /employee/session/page` | Read a bounded history page only after checking session ownership |
+| `POST /employee/session/read` | Accept `sessionId`, a permitted read `operation` and structured `arguments`; require session ownership and current Frappe permissions |
 
-Host and write Origin must match the configured HTTPS origin. Duplicate cookies, unknown fields and unsupported operations are rejected. Authentication is repeated before releasing session results. Logout, account disablement, dependency failure or expiry denies later access; authority restart discards logins. Timeout, disconnect and plugin disposal abort and await owned request work, but cannot undo an already accepted session creation.
+Host and write Origin must match the configured HTTPS origin. Duplicate cookies, unknown fields and unsupported operations are rejected. Authentication is repeated before releasing results. Logout, account disablement, dependency failure or expiry denies later access; authority restart discards logins. Timeout, disconnect and plugin disposal abort and await local request work, but cannot undo accepted session creation or cancel an accepted remote read immediately. Remote reads have the authority deadline; shutdown cancels and awaits its workers.
+
+The read endpoint accepts only `frappe_describe_doctype`, `frappe_list_documents` and `frappe_get_document`. The authority resolves the opaque login to its pinned account configuration, validates the explicit DocType scope and invokes the existing business reader with that account's private assertion. It does not authorize by the shared runtime UID or accept user, site, executable, permission-bypass or write arguments. The existing reader checks the signed account and uses Frappe permissions and `get_list`; this layer adds no class-access policy of its own.
+
+Only one read per account runs at a time. Queries remain bounded to 8192 wire bytes and replies to 262144 bytes, with any smaller API response limit also applied. Revocation during a read discards the result; a new login cannot revive the old request. Results return to the authenticated API caller and are not appended to model history. This endpoint is not an Agent tool or an audit-complete AI execution path.
 
 ## Explicit configuration
 
@@ -54,12 +59,15 @@ The authority runs with `--config` pointing to an operator-owned private JSON fi
 | `issuer`, `secret_file`, `identity_configs` | Exact site, private signing-key file, 1–256 existing account-check configurations |
 | `session_seconds`, `max_sessions` | 60–28800 seconds, 1–4096 simultaneous logins |
 | `max_connections`, `timeout_seconds` | 1–64 connections, 1–30 seconds per operation |
+| `read_doctypes` | Required list of 0–64 distinct safe DocTypes; an empty list disables all business reads |
+
+Read access also requires an existing valid assertion for each account. The trusted deployment owns [assertion renewal](../../../packages/extensions/tool-native-bench-frappe/README.md#native-bench-assertion-renewal); the shared runtime cannot renew assertions or read their files. Missing or expired assertions fail closed. The keyless fixture substitutes only account state and business query results; live Frappe permission and browser acceptance remain deployment work.
 
 ## Before production admission
 
 The existing Frappe launcher targets `/sso`; this preview uses `/employee/sso`. Production routing, a shared employee UI and real browser/TLS SSO acceptance are not installed by this change. Ordinary Host cookies still authorize privileged Host APIs; an employee cookie does not. Never distribute the Host launch URL to shared employees.
 
-The UID-bound read broker still maps one UID to one employee. It cannot authorize different employees inside a shared process. Before enabling prompt execution, bind the verified session principal to each queued Agent turn, propagate it through a credential-free business bridge, and recheck Frappe role, record, field and workflow permissions for each operation. Never accept a model-selected actor or use an Administrator fallback.
+The UID-bound read broker still maps one UID to one employee. It cannot authorize different employees inside a shared process. The shared authority selects the account independently for each read. Before enabling prompt execution, bind each queued Agent turn to its verified caller, attach the read bridge without placing credentials in model inputs, and log actual tool calls and results. Writes require their own business services, workflow checks and approvals. Never accept a model-selected actor or use an Administrator fallback.
 
 Keep the shared runtime separate from Bench ownership and signing material, protect direct ports and every unscoped API, redact proxy ticket queries, and validate resource limits under load. This increment changes no Frappe DocType, business record, account permission or production service.
 

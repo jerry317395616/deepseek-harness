@@ -1,5 +1,5 @@
-/** Opt-in account-owned session API preview for one shared Harness process.
- * No prompt, tool execution, attachment, search, or global event endpoint is exposed.
+/** Opt-in account-owned session and scoped read API for one shared Harness process.
+ * No prompt, model tool execution, attachment, search, or global event endpoint is exposed.
  */
 import { randomUUID } from 'node:crypto'
 import type { IncomingMessage, ServerResponse } from 'node:http'
@@ -55,6 +55,11 @@ const pageSchema = z.object({
   beforeSeq: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   maxMessages: z.number().int().min(1).max(100).optional(),
 }).strict()
+const readSchema = z.object({
+  sessionId: pageSchema.shape.sessionId,
+  operation: z.enum(['frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
+  arguments: z.record(z.string(), z.unknown()),
+}).strict()
 
 /** Execute account-owned operations; authorization is repeated before releasing results. */
 export class EmployeeSessionAccess {
@@ -67,7 +72,7 @@ export class EmployeeSessionAccess {
   constructor(
     private readonly controller: Pick<SessionController, 'create' | 'list' | 'page'>,
     private readonly owners: EmployeeOwners,
-    private readonly identity: Pick<EmployeeIdentity, 'authorize'>,
+    private readonly identity: Pick<EmployeeIdentity, 'authorize' | 'read'>,
     private readonly materialize: (sessionId: SessionId) => Promise<void>,
   ) {}
 
@@ -101,6 +106,13 @@ export class EmployeeSessionAccess {
       result = { items: list.items.filter(item => ids.has(item.sessionId)).map(item => ({
         sessionId: item.sessionId, updatedAt: item.updatedAt, running: item.running, blank: item.blank,
       })) }
+    } else if (operation === 'read') {
+      const parsed = readSchema.safeParse(input)
+      if (!parsed.success) throw new EmployeeAccessError(400)
+      const sessionId = brandString<SessionId>(parsed.data.sessionId)
+      await this.owners.assertOwner(sessionId, principal)
+      await this.recheck(credential, principal, signal)
+      result = await this.identity.read(credential, parsed.data.operation, parsed.data.arguments, signal)
     } else if (operation === 'page') {
       const parsed = pageSchema.safeParse(input)
       if (!parsed.success) throw new EmployeeAccessError(400)
@@ -192,7 +204,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         if (tickets.length !== 1 || [...url.searchParams.keys()].some(key => key !== 'token')) throw new EmployeeAccessError(400)
         const login = z.object({ cookie: z.string().regex(/^[A-Za-z0-9_-]{43}$/u),
           maxAge: z.number().int().min(60).max(28800) }).strict()
-          .parse(await identity.request('login', tickets[0] as string, abort.signal))
+          .parse(await identity.request('login', tickets[0], abort.signal))
         send(res, 303, undefined, { location: '/employee/status',
           'set-cookie': `${COOKIE}=${login.cookie}; Path=/; Max-Age=${String(login.maxAge)}; HttpOnly; Secure; SameSite=Strict` })
         return
@@ -201,7 +213,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       if (url.search !== '') throw new EmployeeAccessError(400)
       if (url.pathname === '/employee/status' && req.method === 'GET') {
         await identity.authorize(login, abort.signal)
-        send(res, 200, JSON.stringify({ access: 'session-preview', businessExecution: false }))
+        send(res, 200, JSON.stringify({ access: 'read-preview', agentExecution: false }))
         return
       }
       if (req.method !== 'POST' || req.headers.origin !== config.publicOrigin) throw new EmployeeAccessError(400)
@@ -210,7 +222,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         send(res, 204, undefined, { 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` })
         return
       }
-      const operation = /^\/employee\/session\/(create|list|page)$/u.exec(url.pathname)?.[1]
+      const operation = /^\/employee\/session\/(create|list|page|read)$/u.exec(url.pathname)?.[1]
       if (operation === undefined) throw new EmployeeAccessError(404)
       const result = await access.execute(operation, await body(req, abort.signal), login, abort.signal)
       const serialized = JSON.stringify(result)
