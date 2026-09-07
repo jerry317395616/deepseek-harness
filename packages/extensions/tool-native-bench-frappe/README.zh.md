@@ -87,6 +87,8 @@ kind: "package-reference"
 
 限定站点的[线上验收程序](../../../scripts/employee-live-acceptance.py)默认只读预览。在指定 Native Bench 上，经授权的操作者核对预览后，可使用 `--run --expected-students N` 执行。它仅接受已有的两个停用测试账号，要求角色完全匹配且班级权限名单未变化，串行执行验收，临时启用账号，并通过 Frappe 密码服务重设测试密码。程序使用真实 HTTPS 登录、Frappe 签名交接票据、独立 Web 配置方案和本机脚本模型，验证记录权限与活动连接撤销。清理时停用账号并清除会话，核对业务记录及权限指纹，并在所属进程停止后删除私有运行目录。主机突然故障或 SIGKILL 可能阻止清理；操作者随后必须通过 Frappe 停用指定测试账号并清除会话。程序需要已构建的 Harness、Bench 解释器及单独安装的代理依赖；不修改正式路由，也不认证公网 TLS、浏览器 Cookie 行为、财务计算或针对恶意本机进程的隔离。
 
+只读[部署预检程序](../../../scripts/employee-deployment-preflight.py)检查固定的 Child/Harness HTTPS 入口和本机 systemd 运行时，不登录、不读取响应正文、不收集凭据。在部署根目录运行 `native-bench/env/bin/python -B deepseek-harness/scripts/employee-deployment-preflight.py`；默认目标为用户服务 `ione-harness.service`，可通过明确的 `--unit` 和 `--scope user|system` 参数检查候选运行时。它报告经证书验证的登录跳转、进程身份分离、选定的沙箱设置和有限资源上限。观测缺失、变化或失败时不予通过。程序始终以退出码 2 结束并报告 `deployment_approved: false`：即使自动基线通过，仍需独立验收路由、登录后的浏览器行为、文件系统及凭据隔离、高权限辅助程序分离，以及故障和负载行为。它不安装或实施限制，不检查 nginx 路由，也不认证多用户部署。
+
 <a id="native-bench-assertion-renewal"></a>
 ### Native Bench 身份断言续期
 

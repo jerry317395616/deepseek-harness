@@ -14,6 +14,8 @@ The [employee gateway helper](../../../../packages/extensions/tool-native-bench-
 
 Login and replay state are bounded and process-local. A ticket is accepted once under a lock and must be issued after startup, so a restart invalidates earlier tickets and cookies without a new database schema. The optional traffic proxy authorizes each HTTP request and WebSocket upgrade, rechecks before releasing response data or relaying a data message, and monitors idle streams. Its account verifier invokes the existing Native Bench renewer in check-only mode. Logout, expiry and a failed identity check close both stream ends; shutdown awaits owned tasks.
 
+The [deployment preflight](../../../../scripts/employee-deployment-preflight.py) records a read-only HTTPS and systemd baseline separately from employee authorization evidence. It rejects shared Bench identities, missing hardening observations and unbounded resources without reading secret files or raw service environments. Successful baseline checks never grant deployment approval: a private directory or systemd property cannot prove that an employee process cannot invoke a privileged helper, access signing material or reach another runtime. Independent browser, routing and hostile-process acceptance remain explicit unknowns rather than inferred successes.
+
 ## Alternatives considered
 
 **Shared host with list filtering.** Session listings are only one entrypoint. This does not restrict tool execution, settings changes or direct API requests.

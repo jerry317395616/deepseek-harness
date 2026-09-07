@@ -3,6 +3,8 @@ on:
   pull_request:
     paths:
       - '.github/workflows/employee-proxy.yml'
+      - 'scripts/employee-*.py'
+      - 'scripts/test_employee*.py'
       - 'packages/extensions/tool-native-bench-frappe/**'
       - 'apps/cli/tests/profiles/employee-readonly/**'
       - 'apps/web/tests/employee-readonly.snapshot.ts'
@@ -11,6 +13,8 @@ on:
     branches: [master]
     paths:
       - '.github/workflows/employee-proxy.yml'
+      - 'scripts/employee-*.py'
+      - 'scripts/test_employee*.py'
       - 'packages/extensions/tool-native-bench-frappe/**'
       - 'apps/cli/tests/profiles/employee-readonly/**'
       - 'apps/web/tests/employee-readonly.snapshot.ts'
@@ -46,6 +50,8 @@ jobs:
       - run: pnpm run build
       - name: Verify transport revocation
         run: "$DSH_EMPLOYEE_PROXY_PYTHON -B -m unittest discover -s packages/extensions/tool-native-bench-frappe/tests -p test_employee_proxy.py -v"
+      - name: Verify employee operator and deployment guards
+        run: "python -B -m unittest discover -s scripts -p 'test_employee*.py' -v"
       - name: Verify isolated Web hosts
         run: pnpm exec vitest run --config vitest.expected.config.ts apps/cli/tests/profiles/employee-readonly/employee-readonly.expected.e2e.ts
       - name: Replay employee session through proxy
