@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -13,6 +13,7 @@ import * as NativeBenchSource from '../src/index.ts'
 let root: string
 let ctx: Context
 let sequence = 0
+let forceApproval = false
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'dsh-native-bench-source-'))
@@ -67,6 +68,8 @@ beforeEach(async () => {
   await ctx.plugin(ToolRuntime)
   await ctx.plugin(LocalFileSystem, { cwd: root })
   await ctx.plugin(LocalSubprocessRuntime)
+  forceApproval = false
+  ctx.on('tools/pre-execute', async (_execution, next) => forceApproval ? { kind: 'allow' } : next())
   await ctx.plugin(NativeBenchSource, { benchRoot: root })
 })
 
@@ -157,17 +160,17 @@ describe('Native Bench source tools', () => {
     expect(text(result)).toContain('report/weekly_recipe_nutrition_analysis/weekly_recipe_nutrition_analysis.py')
   })
 
-  it('plans an upstream DocType field extension only inside Tongjianyun', async () => {
+  it('plans non-structural upstream form presentation only inside Tongjianyun', async () => {
     const result = await call('native_bench_plan_tongjianyun_extension', {
       url_or_route: 'https://child.myyr.top/app/student',
-      change_kind: 'add-field',
+      change_kind: 'form-ui',
     })
     expect(result.isError).toBe(false)
     expect(result.value).toMatchObject({
       extension_app: 'tongjianyun',
       allowed_write_root: 'apps/tongjianyun',
-      structural_change: true,
-      requires_explicit_confirmation: true,
+      structural_change: false,
+      requires_explicit_confirmation: false,
       ready: true,
       source: {
         route_kind: 'doctype',
@@ -176,8 +179,24 @@ describe('Native Bench source tools', () => {
       },
     })
     expect(text(result)).toContain('只读上游文件：apps/education/')
-    expect(text(result)).toContain('建议扩展文件：apps/tongjianyun/tongjianyun/custom/student.json')
+    expect(text(result)).not.toContain('custom/student.json')
     expect(text(result)).not.toContain('建议扩展文件：apps/education/')
+  })
+
+  it.each(['add-field', 'modify-field'])('rejects %s without changing metadata', async (change_kind) => {
+    const result = await call('native_bench_plan_tongjianyun_extension', {
+      url_or_route: '/desk/student', change_kind,
+    })
+    expect(result.isError).toBe(true)
+  })
+
+  it('rejects migration even after forced approval, without spawning Bench', async () => {
+    const spawn = vi.spyOn(ctx.subprocess, 'spawn')
+    forceApproval = true
+    const result = await call('native_bench_deploy_tongjianyun_extension', { action: 'migrate-site' })
+    expect(result.isError).toBe(true)
+    expect(text(result)).toContain('禁止站点迁移')
+    expect(spawn).not.toHaveBeenCalled()
   })
 
   it('requires explicit approval before running a fixed Tongjianyun deploy action', async () => {

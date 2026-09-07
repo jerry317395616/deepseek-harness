@@ -14,6 +14,10 @@
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "exports": {
+    "./policy": {
+      "types": "./lib/types/policy.d.ts",
+      "default": "./lib/policy.js"
+    },
     ".": {
       "types": "./lib/types/index.d.ts",
       "default": "./lib/index.js"
@@ -26,6 +30,7 @@
     "./package.json": "./package.json"
   },
   "files": [
+    "lib/policy.js",
     "lib/index.js",
     "lib/invariant.js",
     "lib/types/**/*.d.ts"

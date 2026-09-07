@@ -48,6 +48,35 @@ SENSITIVE_FIELD_PATTERN = re.compile(
 # Security and infrastructure records are never exposed through this generic
 # reader. Business DocTypes still pass Frappe's own permission checks.
 DENIED_DOCTYPES = {
+    "server script",
+    "customize form",
+    "customize form field",
+    "doctype action",
+    "doctype link",
+    "doctype state",
+    "doctype layout",
+    "doctype layout field",
+    "document naming rule",
+    "document naming settings",
+    "document naming rule condition",
+    "permission inspector",
+    "workflow",
+    "workflow state",
+    "workflow transition",
+    "workflow document state",
+    "workflow action master",
+    "workflow action perm",
+    "notification",
+    "notification recipient",
+    "scheduled job type",
+    "custom html block",
+    "web page",
+    "web template",
+    "print format",
+    "page",
+    "report",
+    "workspace",
+    "dashboard chart source",
     "access log",
     "activity log",
     "api request log",
@@ -408,6 +437,10 @@ def validate_filter_value(value: Any) -> None:
 
 
 def run_operation(frappe: Any, operation: str, arguments: dict[str, Any], frappe_user: str) -> Any:
+    # Direct trusted adapters receive the same metadata rejection as CLI callers.
+    if operation not in ALLOWED_OPERATIONS:
+        raise ValueError("operation is not allowlisted")
+    arguments = normalize_arguments(operation, arguments)
     if operation == "frappe_platform_catalog":
         return platform_catalog(frappe, arguments)
 

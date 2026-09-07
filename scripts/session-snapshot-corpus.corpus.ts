@@ -22,6 +22,7 @@ const snapshotAdapters = [
   'apps/web/tests/employee-readonly.snapshot.ts',
   'apps/web/tests/message-feedback-protocol.snapshot.ts',
   'apps/web/tests/minimal-preset.snapshot.ts',
+  'apps/web/tests/native-bench-business.snapshot.ts',
   'snapshots/acp/acp.snapshot.ts',
   'snapshots/sdk/sdk.snapshot.ts',
   'snapshots/session/headless.snapshot.ts',

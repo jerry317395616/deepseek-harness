@@ -127,7 +127,7 @@ interface RouteTargetResult {
   required_next_steps: string[]
 }
 
-type ExtensionChangeKind = 'form-ui' | 'list-ui' | 'desk-page' | 'custom-page' | 'add-field' | 'modify-field' | 'business-logic' | 'report' | 'workspace'
+type ExtensionChangeKind = 'form-ui' | 'list-ui' | 'desk-page' | 'custom-page' | 'business-logic' | 'report' | 'workspace'
 
 interface ExtensionPlanResult {
   change_kind: ExtensionChangeKind
@@ -142,7 +142,7 @@ interface ExtensionPlanResult {
   rules: string[]
 }
 
-type TongjianyunDeployAction = 'build-assets' | 'migrate-site' | 'clear-cache'
+type TongjianyunDeployAction = 'build-assets' | 'clear-cache'
 
 interface DeployResult {
   action: TongjianyunDeployAction
@@ -159,8 +159,6 @@ const EXTENSION_CHANGE_KINDS = new Set<ExtensionChangeKind>([
   'list-ui',
   'desk-page',
   'custom-page',
-  'add-field',
-  'modify-field',
   'business-logic',
   'report',
   'workspace',
@@ -168,7 +166,6 @@ const EXTENSION_CHANGE_KINDS = new Set<ExtensionChangeKind>([
 
 const TONGJIANYUN_DEPLOY_ACTIONS = new Set<TongjianyunDeployAction>([
   'build-assets',
-  'migrate-site',
   'clear-cache',
 ])
 
@@ -499,13 +496,9 @@ async function planTongjianyunExtension(
   const moduleRoot = `${packageRoot}/${app}`
   const slug = source.route_slug
   const sourceApp = source.matched_app ?? 'unresolved'
-  const structuralChange = changeKind === 'add-field' || changeKind === 'modify-field'
   const suggested = new Set<string>([`${packageRoot}/hooks.py`])
 
-  if (structuralChange) {
-    suggested.add(`${packageRoot}/custom/${slug}.json`)
-    suggested.add(`${packageRoot}/public/js/${slug}.js`)
-  } else if (source.matched_app === app) {
+  if (source.matched_app === app) {
     source.target_files.forEach(path => suggested.add(path))
   } else {
     switch (changeKind) {
@@ -545,16 +538,14 @@ async function planTongjianyunExtension(
     allowed_write_root: extensionRoot.display,
     upstream_source_files_read_only: source.matched_app === app ? [] : source.target_files,
     suggested_extension_files: [...suggested].sort(),
-    structural_change: structuralChange,
-    requires_explicit_confirmation: structuralChange,
+    structural_change: false,
+    requires_explicit_confirmation: false,
     ready: source.target_lock.ready,
     rules: [
       `允许读取 Native Bench 所有应用；业务源码只允许写入 ${extensionRoot.display}。`,
       '禁止修改 Frappe、Education、ERPNext、IONE Core 等上游应用源码。',
-      '禁止新增 DocType，也禁止直接修改任何上游 DocType JSON。',
-      structuralChange
-        ? '字段结构请求必须先列出目标 DocType、字段、类型、默认值、权限与数据迁移影响，获得用户明确确认后才可通过 Tongjianyun Custom Field/Property Setter fixture 实施。'
-        : '当前请求不是字段结构变更，不得顺带创建 Custom Field、Property Setter 或数据库结构变更。',
+      '禁止一切 DocType 变更，包括字段、权限、命名规则、Custom Field、Property Setter 和通过 fixture 或迁移间接改变结构。',
+      '优先复用 Frappe、ERPNext、Education 现有业务能力，不得另写一套业务逻辑；规划不是执行授权。',
       '实施后运行相关测试、构建/缓存更新，并在用户原始路由做浏览器验证。',
     ],
   }
@@ -576,13 +567,12 @@ async function deployTongjianyunExtension(
   requestedAction: string,
   signal: AbortSignal,
 ): Promise<DeployResult> {
+  if (requestedAction === 'migrate-site') throw new Error('当前禁止站点迁移：不得通过迁移或 fixture 间接改变 DocType。')
   const action = tongjianyunDeployAction(requestedAction)
   if (config.site.trim() === '') throw new Error('The deployment did not configure a Frappe site')
   const argv = action === 'build-assets'
     ? [config.benchExecutable, 'build', '--app', config.extensionApp]
-    : action === 'migrate-site'
-      ? [config.benchExecutable, '--site', config.site, 'migrate']
-      : [config.benchExecutable, '--site', config.site, 'clear-cache']
+    : [config.benchExecutable, '--site', config.site, 'clear-cache']
   if (signal.aborted) throw new Error('Tongjianyun deployment action was cancelled')
 
   let handle: SubprocessHandle
@@ -611,7 +601,7 @@ async function deployTongjianyunExtension(
   const stdout = handle.collected.stdout?.readFrom(0)
   const stderr = handle.collected.stderr?.readFrom(0)
   if (stdout === undefined || stderr === undefined) throw new Error('Tongjianyun deployment output streams are unavailable')
-  if (signal.aborted) throw new Error('Tongjianyun deployment action was cancelled')
+  signal.throwIfAborted()
   if (outcome.signal !== null || outcome.exitCode === null) throw new Error('Tongjianyun deployment action was terminated')
   if (outcome.exitCode !== 0) {
     const detail = stderr.text.trim() || stdout.text.trim()
@@ -623,9 +613,7 @@ async function deployTongjianyunExtension(
     site: config.site,
     command: action === 'build-assets'
       ? `bench build --app ${config.extensionApp}`
-      : action === 'migrate-site'
-        ? `bench --site ${config.site} migrate`
-        : `bench --site ${config.site} clear-cache`,
+      : `bench --site ${config.site} clear-cache`,
     exit_code: outcome.exitCode,
     stdout: stdout.text,
     stderr: stderr.text,
@@ -734,7 +722,7 @@ async function searchCode(
   const stdout = handle.collected.stdout?.readFrom(0)
   if (stdout === undefined) throw new Error('Native Bench search produced no output stream')
   if (stdout.lossy) throw new Error('Native Bench search result exceeded its output limit; narrow query or app')
-  if (exec.signal.aborted) throw new Error('Native Bench search was cancelled')
+  exec.signal.throwIfAborted()
   if (outcome.signal !== null || outcome.exitCode === null) throw new Error('Native Bench search was terminated')
   if (outcome.exitCode !== 0 && outcome.exitCode !== 1) {
     const stderr = handle.collected.stderr?.readFrom(0).text.trim()
@@ -852,8 +840,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       '- native_bench_resolve_ui_route 的 target_lock.ready 不为 true 时不得编辑；应继续只读取证，消除未解析或多应用歧义。',
       '- 修改任意 Frappe 业务界面或逻辑前，还必须调用 native_bench_plan_tongjianyun_extension；可以读取所有应用，但所有业务源码变更只能写入配置的 Tongjianyun 扩展应用。',
       '- Frappe、Education、ERPNext、IONE Core 等上游应用是只读事实来源，不得直接修改。禁止新增 DocType，禁止直接修改上游 DocType JSON。',
-      '- 只有用户明确要求字段结构变更且已预览目标、字段、权限和迁移影响时，才可在 Tongjianyun 中维护 Custom Field/Property Setter fixture；普通 UI 请求不得顺带改结构。',
-      '- 需要构建资源、迁移站点或清缓存时，只能使用 native_bench_deploy_tongjianyun_extension 的固定动作并等待用户批准；不得用任意命令绕过写入边界。',
+      '- 当前禁止一切 DocType 变更，包括字段、权限、命名规则、Custom Field、Property Setter、fixture 和迁移；聊天确认不能解除禁止。',
+      '- 不允许迁移站点。受控维护入口的资源构建或清缓存仍需逐次批准；普通业务入口不提供发布工具，不得用任意命令绕过。',
       '- UI 修改后必须在用户给出的原始路由验证实际显示；只验证 Python 返回值、清除缓存或重启进程不能证明界面修改完成。',
       '- 涉及任意 Native Bench 应用业务逻辑时，先用 native_bench_search_code 搜索，再用 native_bench_read_file 读取上下文。',
       '- 涉及运行配置时使用 native_bench_runtime_status；该工具不会返回站点密钥或数据库密码。',
@@ -866,7 +854,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     if (execution.name !== 'native_bench_deploy_tongjianyun_extension') return next()
     return {
       kind: 'ask',
-      reason: '需要用户逐次批准：将执行固定的 Tongjianyun Frappe 发布动作；可能更新站点资源、缓存或运行迁移，且不接受任意命令参数。',
+      reason: '需要用户逐次批准：将执行固定的 Tongjianyun 资源构建或清缓存；不允许站点迁移或任意命令参数。',
     }
   })
 
@@ -903,10 +891,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'native_bench_plan_tongjianyun_extension',
-    description: '解析真实 Frappe 路由，并把界面、字段、报表或业务逻辑修改规划到 Tongjianyun 应用内。返回只读上游来源、允许写入根目录、建议扩展文件和结构变更确认要求。任何业务代码修改前必须调用。只读。',
+    description: '解析真实 Frappe 路由，并把复用现有平台功能的界面和报表组合规划到 Tongjianyun 应用内。返回只读上游来源和建议扩展文件。禁止任何 DocType 结构变更；规划不代表执行授权。只读。',
     parameters: {
       url_or_route: { type: 'string', required: true, description: '用户正在查看的完整 URL 或 Frappe 路由。' },
-      change_kind: { type: 'string', required: true, description: '变更类型：form-ui、list-ui、desk-page、custom-page、add-field、modify-field、business-logic、report 或 workspace。' },
+      change_kind: { type: 'string', required: true, description: '变更类型：form-ui、list-ui、desk-page、custom-page、report 或 workspace。受控维护入口另外支持 business-logic 取证规划；禁止字段结构变更。' },
     },
     output: {
       schema: { type: 'json' as const },
@@ -940,9 +928,9 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   ctx.effect(() => ctx.tools.register(defineTool({
     name: 'native_bench_deploy_tongjianyun_extension',
-    description: '在用户逐次批准后执行固定的 Tongjianyun 发布动作。仅支持 build-assets、migrate-site、clear-cache；站点、Bench 路径、应用和可执行文件均由部署配置固定，不接受任意命令。',
+    description: '受控维护入口在逐次批准后执行固定的 Tongjianyun 资源构建或清缓存。仅支持 build-assets、clear-cache；禁止迁移站点，不接受任意命令。普通业务入口禁止此工具。',
     parameters: {
-      action: { type: 'string', required: true, description: '固定动作：build-assets、migrate-site 或 clear-cache。' },
+      action: { type: 'string', required: true, description: '固定动作：build-assets 或 clear-cache；不支持迁移。' },
     },
     output: {
       schema: { type: 'json' as const },

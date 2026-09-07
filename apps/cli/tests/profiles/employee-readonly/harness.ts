@@ -27,6 +27,7 @@ export async function startEmployee(
   disposers: (() => Promise<unknown>)[], label: string, baseURL: string, existingRoot?: string,
   replayFixture?: string, brokerMode = false,
   sharedAccess?: { socketPath: string; publicOrigin: string },
+  businessPolicy = false,
 ) {
   const root = existingRoot ?? await mkdtemp(join(tmpdir(), 'dsh-employee-profile-'))
   if (existingRoot === undefined) disposers.push(() => rm(root, { recursive: true, force: true }))
@@ -43,12 +44,15 @@ export async function startEmployee(
         bundles: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'], patchReload: 'startup',
       } },
       dependencies: {
+        '@deepseek-ai/dsh-tool-native-bench-source': 'link:' + join(repo, 'packages/extensions/tool-native-bench-source'),
         '@deepseek-ai/dsh-tool-native-bench-frappe': 'link:' + join(repo, 'packages/extensions/tool-native-bench-frappe'),
         '@deepseek-ai/dsh-llm-replay': 'link:' + join(repo, 'packages/test-support/llm-replay'),
       },
     }))
     await symlink(join(repo, 'packages/extensions/tool-native-bench-frappe'),
       join(moduleDir, 'dsh-tool-native-bench-frappe'), process.platform === 'win32' ? 'junction' : 'dir')
+    await symlink(join(repo, 'packages/extensions/tool-native-bench-source'),
+      join(moduleDir, 'dsh-tool-native-bench-source'), process.platform === 'win32' ? 'junction' : 'dir')
     await symlink(join(repo, 'packages/test-support/llm-replay'),
       join(moduleDir, 'dsh-llm-replay'), process.platform === 'win32' ? 'junction' : 'dir')
   }
@@ -63,6 +67,11 @@ export async function startEmployee(
       },
     }] }]),
     { id: 'session-persistence-jsonl', config: { root: join(home, 'sessions'), compression: 'none' } },
+    ...(businessPolicy ? [{ insert: [{
+      id: 'business-frappe-fixture', name: '@deepseek-ai/dsh-tool-native-bench-frappe', config: {
+        benchRoot: join(root, 'missing-bench'), site: 'example.test', frappeUser: 'fixture@example.test',
+      },
+    }] }] : []),
   ]))
   const launch = resolveExampleLaunch({
     srcBin: join(repo, 'apps/cli/src/bin.ts'),
@@ -71,6 +80,7 @@ export async function startEmployee(
     configArgs: ['--profile', 'web', '--patch', overlay,
       ...(sharedAccess === undefined ? [] : ['--patch', join(repo, 'apps/cli/config/examples/employee-shared/cordis.yml')]),
       '--patch', fixturePatch,
+      ...(businessPolicy ? ['--patch', join(repo, 'apps/cli/config/examples/native-bench-business/cordis.yml')] : []),
       '--no-open', '--host', '127.0.0.1', '--port', '0'],
   })
   // No inherited credentials, homes, model routes, or user Node hooks enter the child.
@@ -81,6 +91,8 @@ export async function startEmployee(
     DSH_HOME: home, DSH_AGENTS_HOME: join(root, 'agents'), DSH_TELEMETRY_DISABLED: '1',
     EMPLOYEE_FIXTURE_MODEL_KEY: 'synthetic-no-provider-key',
     DSH_EMPLOYEE_PRESET_ROOT: presets,
+    DSH_NATIVE_BENCH_BUSINESS_PRESET_ROOT: join(repo, 'apps/cli/config/examples/native-bench-business/presets'),
+    DSH_NATIVE_BENCH_BUSINESS_WORKSPACE: root,
     ...(sharedAccess === undefined ? {} : {
       DSH_SHARED_IDENTITY_SOCKET: sharedAccess.socketPath, DSH_SHARED_PUBLIC_ORIGIN: sharedAccess.publicOrigin,
       DSH_SHARED_OWNERS_DIRECTORY: join(home, 'employee-owners'),

@@ -1,0 +1,195 @@
+# Apply last with --patch. Host administrators own this file and all loaded plugins.
+# The global policy also covers previously created sessions on shipped coding presets.
+- insert:
+    - id: native-bench-business-policy
+      name: '@deepseek-ai/dsh-tool-native-bench-source/policy'
+
+- id: tools
+  config:
+    mode: native
+
+- id: agent-presets
+  config:
+    default: native-bench-business
+    includeShippedRoot: true
+    includeUserRoot: false
+    roots:
+      - path: !!js process.env.DSH_NATIVE_BENCH_BUSINESS_PRESET_ROOT ?? process.cwd() + '/apps/cli/config/examples/native-bench-business/presets'
+        trust: system
+
+- id: session-controller
+  config:
+    nativeOpen: false
+
+- id: sandbox-policy
+  config:
+    mode: read-only
+    workspaceRoot: !!js process.env.DSH_NATIVE_BENCH_BUSINESS_WORKSPACE ?? '/home/zyd/frappe/native-bench/apps/tongjianyun'
+    lockDeploymentPolicy: true
+
+- id: permission
+  config:
+    presets:
+      read-only:
+        sandbox: read-only
+        approval: ask
+
+# Approval replies are retained for existing controlled business-record updates.
+# They cannot override the monotonic tool guard or the Frappe metadata denylist.
+- id: typert-gateway
+  config:
+    allowedEndpoints:
+      - $events
+      - $events/result
+      - session/list
+      - session/create
+      - session/prompt
+      - session/cancel
+      - session/page
+      - session/follow
+      - session/control
+      - session/rename
+      - session/updateQueue
+      - session/modelCatalog
+      - session/canOpenWorkspacePath
+      - workspace/follow
+      - agentPresets/list
+      - settings/describe
+
+- id: code-runtime
+  disabled: true
+
+- id: tool-bash
+  disabled: true
+
+- id: tool-pwsh
+  disabled: true
+
+- id: tool-fs
+  disabled: true
+
+- id: tool-fs-search
+  disabled: true
+
+- id: tool-str-replace-editor
+  disabled: true
+
+- id: tool-jobs
+  disabled: true
+
+- id: tool-skill
+  disabled: true
+
+- id: tool-subagent
+  disabled: true
+
+- id: tool-subagent-fork
+  disabled: true
+
+- id: tool-subagent-report
+  disabled: true
+
+- id: tool-subagent-control
+  disabled: true
+
+- id: tool-subagent-list-agents
+  disabled: true
+
+- id: tool-workflow
+  disabled: true
+
+- id: tool-ralph
+  disabled: true
+
+- id: tool-goal
+  disabled: true
+
+- id: tool-todo
+  disabled: true
+
+- id: tool-web
+  disabled: true
+
+- id: skill-filesystem
+  disabled: true
+
+- id: cordis-host-runner
+  disabled: true
+
+- id: cordis-client-runner
+  disabled: true
+
+- id: plugin-inventory
+  disabled: true
+
+- id: file-reference-local
+  disabled: true
+
+- id: session-reference
+  disabled: true
+
+- id: directory-picker
+  disabled: true
+
+- id: web-search-deepseek
+  disabled: true
+
+- id: web-fetch-http
+  disabled: true
+
+- id: client-hmr
+  disabled: true
+
+- id: ui-settings
+  disabled: true
+
+- id: ui-settings-general
+  disabled: true
+
+- id: ui-settings-models
+  disabled: true
+
+- id: ui-settings-plugin-inventory
+  disabled: true
+
+- id: ui-settings-plugins
+  disabled: true
+
+- id: ui-cordis
+  disabled: true
+
+- id: ui-attachment
+  disabled: true
+
+- id: ui-deliverables
+  disabled: true
+
+- id: ui-commands
+  disabled: true
+
+- id: ui-skill
+  disabled: true
+
+- id: ui-subagent
+  disabled: true
+
+- id: ui-jobs
+  disabled: true
+
+- id: ui-goal
+  disabled: true
+
+- id: ui-model-selection
+  disabled: true
+
+- id: ui-permission
+  disabled: true
+
+- id: ui-agent-preset
+  disabled: true
+
+- id: ui-plan
+  disabled: true
+
+- id: ui-workflow-run
+  disabled: true

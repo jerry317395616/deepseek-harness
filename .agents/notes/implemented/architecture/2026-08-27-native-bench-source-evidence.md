@@ -22,6 +22,8 @@ Business-mode deployment uses an explicit expected user, a private signed actor 
 
 ## Consequences
 
+The hosted business overlay now adds a global monotonic tool guard, a business preset and an exact Remote endpoint allowlist. Ordinary conversations cannot restore code execution through approval, configuration or an older coding preset. All field planning and site migration are rejected; the generic Frappe adapter also denies executable and structural metadata and validates direct calls. Existing business-record updates retain preview, approval and Frappe checks. This does not implement shared-login actor binding or safe UI-creation executors. The keyless native-bench-business Web recording verifies the assembled profile, chat persistence and refusal; source-policy and Python schema-freeze tests cover direct bypass attempts.
+
 - Questions about nutrition calculations can combine exact source lines from `native-bench/apps` with current database rules and recipe data without a localhost or public MCP network hop.
 - Questions about other Native Bench applications can combine the same source evidence with permission-aware Frappe ORM reads; the generic bridge is not limited to Tongjianyun.
 - Source tools cannot read arbitrary host paths, secrets, logs, or database files, and they do not execute SQL or mutate Frappe. The generic Frappe bridge exposes only approved scalar updates to existing business records; create, delete, child-table, workflow, schema, SQL, and Python operations remain unavailable. The nutrition adapter is a separate read-only seam with a fixed operation allowlist; rule writes remain an explicit MCP/UI workflow.

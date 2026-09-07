@@ -1,0 +1,8 @@
+version: 1
+scenario: native-bench-business
+profile: web
+composition: native-bench-business
+recording: authored
+header:
+  class: native-bench-business
+  pin: true

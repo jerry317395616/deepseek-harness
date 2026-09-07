@@ -22,7 +22,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`, `ctx.shell`, `ctx.systemPrompt`, `ctx.shellEnv`, `ctx.jobs at call time for run_in_background` | `tool/call`, `tool/result` | - | The pwsh tool is the PowerShell-dialect consumer of the bash executor seam for Windows compositions (a PowerShell executor such as `@deepseek-ai/dsh-pwsh-local` backs `ctx.shell`); it mirrors the bash tool call-for-call minus sandbox controls — `run_in_background` runs register with the generic `ctx.jobs` runtime and are collected/stopped through the `job_*` tools, and the managed `DSH_*` environment comes from `@deepseek-ai/dsh-shell-env`. Each call runs in a fresh process (no persistent PTY session), with native `C:\...` paths and `$env:NAME` variables. |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`, `cordis_inspect_list`, `cordis_inspect_query`, `cordis_inspect_self`, `cordis_run`, `cordis_stop`, `cordis_undefine` | `ctx.tools`, `ctx.dynamicCordisRunner` | `tool/call`, `tool/result`, `process-local dynamic package lifecycle` | - | Not in any shipped tree (a deliberate opt-in — dynamic package code reaches the real runtime, see .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md). The toolset injects `ctx.dynamicCordisRunner` from `@deepseek-ai/dsh-cordis-host-runner`, which owns the definition registry and the vm sandbox; a composition missing it never activates the tools. A running package may register ADDITIONAL model-visible tools until it is stopped, undefined, or DSH restarts; a full changed request header logs those tool-set changes. |
 | `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`, `tongjianyun_create_nutrition_rule_draft`, `tongjianyun_explain_nutrition_standard`, `tongjianyun_get_weekly_nutrition_analysis`, `tongjianyun_list_nutrition_rules`, `tongjianyun_preview_nutrition_rule`, `tongjianyun_publish_nutrition_rule`, `tongjianyun_publish_report`, `tongjianyun_rollback_nutrition_rule`, `tongjianyun_submit_nutrition_rule` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.credentials (MCP compatibility mode only)` | `tool/call`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments run the three read-only nutrition operations directly in the configured Bench Python/Frappe context and keep MCP as an explicit compatibility mode for writes; the latter requires an authenticated endpoint and credential reference. A fixed routing section requires source evidence before current data, while publish and rollback require exact user confirmations and the Frappe server enforces the same controls again. |
-| `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`, `native_bench_runtime_status`, `native_bench_search_code` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.fs` | `tool/call`, `tool/result` | - | The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench. |
+| `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_deploy_tongjianyun_extension`, `native_bench_plan_tongjianyun_extension`, `native_bench_read_file`, `native_bench_resolve_ui_route`, `native_bench_runtime_status`, `native_bench_search_code` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess`, `ctx.fs` | `tool/call`, `tool/result` | - | The package is an explicit deployment opt-in. It searches and reads only the configured Native Bench source roots and exposes no database or secret access; the active deployment pins /home/zyd/frappe/native-bench. |
 | `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_apply_document_update`, `native_bench_frappe_describe_doctype`, `native_bench_frappe_get_document`, `native_bench_frappe_list_documents`, `native_bench_frappe_platform_catalog`, `native_bench_frappe_preview_document_update` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess` | `tool/call`, `approved existing Frappe business-document field values`, `tool/result` | - | The optional Bundle inserts this tool row disabled. Native deployments expose a live platform catalog, safe metadata, permission-aware reads, and previewed one-shot-approved scalar updates to existing business documents. Protected infrastructure and credential DocTypes are denied, sensitive fields are redacted, and the package never executes arbitrary SQL, Python, or DocType schema changes. |
 | `@deepseek-ai/dsh-tool-frappe-docs` | `frappe_docs_get_page`, `frappe_docs_search`, `frappe_docs_status` | `ctx.tools`, `ctx.systemPrompt`, `ctx.subprocess` | `tool/call`, `tool/result` | - | The optional Bundle inserts this read-only tool row disabled. Deployments synchronize official docs.frappe.io text pages outside model calls, preferring Markdown and using bounded same-origin HTML body fallback; the tools search and read the local index while preserving product, version, update, and official URL metadata. Runtime behavior remains owned by active Native Bench source and site evidence. |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`, `ctx.terminals`, `an owning Agent at execution time` | `tool/call`, `PTY shell state`, `tool/result` | - | One owner-isolated persistent bash tool; deployment composition supplies the PTY backend and may override the model-facing environment description. |
@@ -870,6 +870,53 @@ The optional Bundle inserts this tool row disabled. Native deployments run the t
 
 ## `@deepseek-ai/dsh-tool-native-bench-source`
 
+### `native_bench_deploy_tongjianyun_extension`
+
+受控维护入口在逐次批准后执行固定的 Tongjianyun 资源构建或清缓存。仅支持 build-assets、clear-cache；禁止迁移站点，不接受任意命令。普通业务入口禁止此工具。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "固定动作：build-assets 或 clear-cache；不支持迁移。"
+    }
+  },
+  "required": [
+    "action"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
+### `native_bench_plan_tongjianyun_extension`
+
+解析真实 Frappe 路由，并把复用现有平台功能的界面和报表组合规划到 Tongjianyun 应用内。返回只读上游来源和建议扩展文件。禁止任何 DocType 结构变更；规划不代表执行授权。只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "url_or_route": {
+      "type": "string",
+      "description": "用户正在查看的完整 URL 或 Frappe 路由。"
+    },
+    "change_kind": {
+      "type": "string",
+      "description": "变更类型：form-ui、list-ui、desk-page、custom-page、report 或 workspace。受控维护入口另外支持 business-logic 取证规划；禁止字段结构变更。"
+    }
+  },
+  "required": [
+    "url_or_route",
+    "change_kind"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
 ### `native_bench_read_file`
 
 读取当前 Native Bench apps、sites 或 config 中的源码和配置文件，返回带行号的有限范围。禁止读取环境密钥、日志和数据库密码。只读。
@@ -893,6 +940,27 @@ The optional Bundle inserts this tool row disabled. Native deployments run the t
   },
   "required": [
     "path"
+  ]
+}
+```
+
+Source: [`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
+### `native_bench_resolve_ui_route`
+
+把 Frappe /desk 或 /app URL/路由解析为当前 Native Bench 中准确的 Page、Query Report、Workspace 或 DocType 文件，并提取前端调用的后端方法。任何 UI 修改前必须先调用。只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "url_or_route": {
+      "type": "string",
+      "description": "用户正在查看的完整 URL 或 Frappe 路由，例如 https://child.example/desk/weekly-recipe-nutrition-sheet。"
+    }
+  },
+  "required": [
+    "url_or_route"
   ]
 }
 ```

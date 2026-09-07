@@ -26,7 +26,7 @@
 | `@deepseek-ai/dsh-tool-pwsh` | `pwsh` | `ctx.tools`、`ctx.shell`、`ctx.systemPrompt`、`ctx.shellEnv`、`ctx.jobs at call time for run_in_background` | `tool/call`、`tool/result` | - | pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费方（由 `@deepseek-ai/dsh-pwsh-local` 等 PowerShell 执行器为 `ctx.shell` 提供后端）；除沙箱接口外，它逐项对应 bash 工具调用。使用 `run_in_background` 的运行会注册到通用 `ctx.jobs` 运行时，并通过 `job_*` 工具收集／停止；托管的 `DSH_*` 环境来自 `@deepseek-ai/dsh-shell-env`。每次调用都在新进程中运行，不使用持久 PTY 会话。路径采用原生 `C:\...` 形式，变量采用 `$env:NAME`。 |
 | `@deepseek-ai/dsh-tool-cordis` | `cordis_define`、`cordis_inspect_list`、`cordis_inspect_query`、`cordis_inspect_self`、`cordis_run`、`cordis_stop`、`cordis_undefine` | `ctx.tools`、`ctx.dynamicCordisRunner` | `tool/call`、`tool/result`、`process-local dynamic package lifecycle` | - | 不在任何随产品发布的树中，需要显式选择启用；动态 Package 代码可以访问真实运行时，见 .agents/notes/implemented/feature/2026-07-08-self-referential-cordis-toolset.md。该工具集注入 `@deepseek-ai/dsh-cordis-host-runner` 提供的 `ctx.dynamicCordisRunner`，后者拥有定义注册表和 vm 沙箱；组合缺少它时这些工具不会激活。运行中的 Package 在停止、undefine 或 DSH 重启前可以注册**额外的**模型可见工具；发生这类工具集变化时，系统会记录完整且有变动的请求头。 |
 | `@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules` | `tongjianyun_compare_age_group_nutrition_standards`、`tongjianyun_create_nutrition_rule_draft`、`tongjianyun_explain_nutrition_standard`、`tongjianyun_get_weekly_nutrition_analysis`、`tongjianyun_list_nutrition_rules`、`tongjianyun_preview_nutrition_rule`、`tongjianyun_publish_nutrition_rule`、`tongjianyun_publish_report`、`tongjianyun_rollback_nutrition_rule`、`tongjianyun_submit_nutrition_rule` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.credentials（仅 MCP 兼容模式）` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。Native 部署会在配置的 Bench Python/Frappe 上直接运行三个只读营养操作，并将 MCP 保留为规则写入的显式兼容模式；后者需要已认证接口和凭据引用。固定路由区段要求先取源码证据再读取当前数据，发布和回滚需要精确的用户确认，Frappe 服务端会再次执行同样的控制。 |
-| `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_read_file`、`native_bench_runtime_status`、`native_bench_search_code` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.fs` | `tool/call`、`tool/result` | - | 这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 `/home/zyd/frappe/native-bench`。 |
+| `@deepseek-ai/dsh-tool-native-bench-source` | `native_bench_deploy_tongjianyun_extension`, `native_bench_plan_tongjianyun_extension`, `native_bench_read_file`, `native_bench_resolve_ui_route`, `native_bench_runtime_status`, `native_bench_search_code` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess`、`ctx.fs` | `tool/call`、`tool/result` | - | 这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 `/home/zyd/frappe/native-bench`。 |
 | `@deepseek-ai/dsh-tool-native-bench-frappe` | `native_bench_frappe_apply_document_update`、`native_bench_frappe_describe_doctype`、`native_bench_frappe_get_document`、`native_bench_frappe_list_documents`、`native_bench_frappe_platform_catalog`、`native_bench_frappe_preview_document_update` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess` | `tool/call`、`经批准的既有 Frappe 业务文档字段值`、`tool/result` | - | 可选 Bundle 会以禁用状态插入该工具行。Native 部署提供实时平台目录、安全元数据、权限感知读取，以及经预览和一次性用户批准后对既有业务文档进行的有限标量字段更新。受保护基础设施与凭据 DocType 会被拒绝，敏感字段会脱敏，且不会执行任意 SQL、Python 或 DocType 结构变更。 |
 | `@deepseek-ai/dsh-tool-frappe-docs` | `frappe_docs_get_page`、`frappe_docs_search`、`frappe_docs_status` | `ctx.tools`、`ctx.systemPrompt`、`ctx.subprocess` | `tool/call`、`tool/result` | - | 可选 Bundle 会以禁用状态插入这个只读工具行。部署在模型调用之外同步 docs.frappe.io 官方文本页面，优先读取 Markdown，并在有界范围内读取同源 HTML 正文作为后备；工具搜索和读取本地索引，同时保留产品、版本、更新时间和官方链接元数据。当前运行行为仍由 Native Bench 源码和站点证据确定。 |
 | `@deepseek-ai/dsh-tool-bash-persistent` | `bash` | `ctx.tools`、`ctx.terminals`、`an owning Agent at execution time` | `tool/call`、`PTY shell state`、`tool/result` | - | 一个按所有者隔离的持久 bash 工具；部署组合提供 PTY 后端，并可覆盖面向模型的环境描述。 |
@@ -874,6 +874,53 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 ## `@deepseek-ai/dsh-tool-native-bench-source`
 
+### `native_bench_deploy_tongjianyun_extension`
+
+受控维护入口在逐次批准后执行固定的 Tongjianyun 资源构建或清缓存。仅支持 build-assets、clear-cache；禁止迁移站点，不接受任意命令。普通业务入口禁止此工具。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "description": "固定动作：build-assets 或 clear-cache；不支持迁移。"
+    }
+  },
+  "required": [
+    "action"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
+### `native_bench_plan_tongjianyun_extension`
+
+解析真实 Frappe 路由，并把复用现有平台功能的界面和报表组合规划到 Tongjianyun 应用内。返回只读上游来源和建议扩展文件。禁止任何 DocType 结构变更；规划不代表执行授权。只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "url_or_route": {
+      "type": "string",
+      "description": "用户正在查看的完整 URL 或 Frappe 路由。"
+    },
+    "change_kind": {
+      "type": "string",
+      "description": "变更类型：form-ui、list-ui、desk-page、custom-page、report 或 workspace。受控维护入口另外支持 business-logic 取证规划；禁止字段结构变更。"
+    }
+  },
+  "required": [
+    "url_or_route",
+    "change_kind"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
 ### `native_bench_read_file`
 
 读取当前 Native Bench apps、sites 或 config 中的源码和配置文件，返回带行号的有限范围。禁止读取环境密钥、日志和数据库密码。只读。
@@ -903,6 +950,27 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
 
+### `native_bench_resolve_ui_route`
+
+把 Frappe /desk 或 /app URL/路由解析为当前 Native Bench 中准确的 Page、Query Report、Workspace 或 DocType 文件，并提取前端调用的后端方法。任何 UI 修改前必须先调用。只读。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "url_or_route": {
+      "type": "string",
+      "description": "用户正在查看的完整 URL 或 Frappe 路由，例如 https://child.example/desk/weekly-recipe-nutrition-sheet。"
+    }
+  },
+  "required": [
+    "url_or_route"
+  ]
+}
+```
+
+来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
+
 ### `native_bench_runtime_status`
 
 读取当前 Native Bench 的安全运行清单，包括 Bench 路径、默认站点、已安装应用和端口；不会返回密钥或数据库密码。只读。
@@ -918,7 +986,7 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 ### `native_bench_search_code`
 
-在当前运行的 /home/zyd/frappe/native-bench/apps 中搜索源码。返回文件路径、行号和匹配行；必须用于分析童健云业务逻辑，支持中文关键词。只读。
+在当前运行的 /home/zyd/frappe/native-bench/apps 中搜索所有应用源码。返回文件路径、行号和匹配行；支持中文关键词。只读。
 
 ```json
 {
@@ -945,7 +1013,7 @@ pwsh 工具是 Windows 组合中 bash 执行器 seam 的 PowerShell 方言消费
 
 来源：[`packages/extensions/tool-native-bench-source/src/index.ts`](../packages/extensions/tool-native-bench-source/src/index.ts)
 
-这是一个需要显式选择启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 /home/zyd/frappe/native-bench。童健云营养包另有固定白名单的本地 Frappe 只读适配器，规则写入仍须显式使用 MCP/UI。
+这是需要显式启用的部署包。它只搜索和读取配置的 Native Bench 源码根目录，不提供数据库或密钥访问；当前部署固定使用 /home/zyd/frappe/native-bench。
 
 <a id="deepseek-aidsh-tool-native-bench-frappe"></a>
 

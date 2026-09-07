@@ -1,39 +1,107 @@
-# `@deepseek-ai/dsh-tool-native-bench-source`
+---
+description: "Find active Native Bench source and prohibit hosted DocType changes and arbitrary execution."
+kind: "package-reference"
+---
+# @deepseek-ai/dsh-tool-native-bench-source
 
 English | [中文](README.zh.md)
 
-Registers read-only tools for the Frappe Bench that is currently serving the site. The deployment pins the Native Bench root explicitly, so source discovery does not depend on the Harness process working directory. The tools search and read `apps/`, `sites/`, and `config/` through bounded operations and never expose site secrets, environment files, logs, or arbitrary paths.
+## Summary
 
-Configure the package in a profile or home patch:
+Find the Frappe source serving the current site. Resolve routes and plan Tongjianyun extensions without editing upstream applications. An optional Host policy denies arbitrary execution and all DocType changes. Database access remains in the separate Frappe bridge.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+<a id="use-this-package"></a>
+## Use this package
+
+Mount the plugin through trusted profile configuration.
+
+### When to choose it
+
+Use active Bench source as evidence. Apply the business overlay when ordinary conversations must not edit code, customize schema or change their own tools; installing the package alone does not activate that policy.
+
+### Minimal configuration
 
 ```yaml
 - id: native-bench-source
   name: '@deepseek-ai/dsh-tool-native-bench-source'
   config:
     benchRoot: /home/zyd/frappe/native-bench
-    maxMatches: 200
-    timeoutMs: 30000
+
+- id: native-bench-business-policy
+  name: '@deepseek-ai/dsh-tool-native-bench-source/policy'
 ```
 
-`native_bench_search_code` uses the packaged ripgrep binary and returns stable paths, line numbers, and bounded previews. `native_bench_read_file` reads a bounded line window from an allowlisted source or configuration file. `native_bench_runtime_status` returns the safe Bench manifest without credentials. The tools are read-only and do not change the Bench or the Frappe site.
+The [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-tool-native-bench-source) owns all source settings. The policy subpath has no widening configuration. Apply the complete [business overlay](../../../docs/user/guide/native-bench-business.md) last to restrict Remote methods and execution providers.
 
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+Bounded reads and packaged ripgrep searches return source evidence without site credentials. Route resolution distinguishes Pages, Reports, Workspaces and DocTypes. Planning identifies read-only upstream files and Tongjianyun destinations, but edits nothing. Field planning and migration are rejected. Maintenance retains approved asset builds and cache clearing; the business policy denies that tool entirely.
+
+The Host policy installs an early rejection hook and a monotonic global guard. Approval cannot override a guard denial, including in old coding sessions. Only named business operations are admitted. The Frappe adapter separately rejects structural and executable metadata, including direct adapter calls.
+
+| Source | Responsibility |
+|---|---|
+| [index.ts](src/index.ts) | Evidence, route planning, fixed maintenance |
+| [policy.ts](src/policy.ts) | Hosted admission policy |
+| [tests](tests/policy.spec.ts) | Guard precedence and allowed operations |
+
+</details>
+
+<a id="further-exploration"></a>
+## Further Exploration
+
+- [Business overlay](../../../docs/user/guide/native-bench-business.md) — deployment.
+- [Frappe bridge](../tool-native-bench-frappe/README.md) — record permissions.
+- [Gateway](../../api/gateway/README.md) — Remote endpoint admission.
+
+<a id="model-experience"></a>
 ## Model Experience
 
-### Native Bench source tools
+### Source evidence and business policy
 
 #### What the model sees
 
-The three tool schemas are listed in the generated [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-native-bench-source). A fixed routing section tells the model to search `/home/zyd/frappe/native-bench/apps` before reading source context or interpreting current Frappe data.
+The [tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-native-bench-source) describes six evidence, planning and maintenance schemas. The policy states “禁止任何 DocType 新增、修改或删除”. Forbidden calls return a Chinese refusal even after approval. Missing UI executors must be reported rather than claimed as implemented.
 
 #### Token effect
 
-One fixed routing section and three tool schemas join each request while this package is mounted. Search and read results append only the bounded paths, line windows, and previews returned by the tools.
+Providers contribute their schemas and bounded results. The policy adds fixed guidance; a complete business persona can replace provider prompt sections while keeping the restrictions. The Web recording pins the assembled prompt and schemas.
 
 #### KV Cache effect
 
-The routing section and schemas are prefix-stable while the package configuration is unchanged. Mounting, unmounting, or changing the tool definitions replaces that prompt prefix; changing source files or runtime data does not change it.
+Configuration and preset changes replace the prompt prefix. Source contents and tool results do not change fixed policy text or schemas.
 
 ## Known Limitations and Deferred Work
 
-- **Runtime source parity** — Native Bench app directories do not carry a Git revision in every deployment. The tools therefore identify the configured root and return source paths, but a separate release manifest or file hash is needed for historical version comparison.
-- **Database operations remain a separate package** — this package never executes SQL or reads Frappe documents directly. The Tongjianyun nutrition package uses a separately allowlisted local Frappe adapter for permission-aware read evidence; MCP remains an explicit compatibility mode for network deployments.
+<a id="known-limitations-and-deferred-work"></a>
+
+The policy restricts Harness tools, not every administrator path.
+
+- **Trusted Host** — operators can replace plugins or configuration. Filesystem permissions and direct HTTP routes require separate controls.
+- **Identity** — shared-login actor binding is not implemented here. Updates retain their deployed actor, preview, approval and Frappe checks.
+- **UI composition** — planning does not provide a safe Page, Workspace or Report creation executor.
+- **History** — old coding presets may expose schemas whose execution the global guard denies.
+- **Source versions** — a source root is not a historical release hash.
+
+<a id="dev-note"></a>
+### Dev Note
+
+<details>
+<summary>Working context for maintainers — click to expand</summary>
+
+The keyless native-bench-business Web recording exercises the shipped CLI. Python schema-freeze tests do not initialize a real site.
+
+</details>

@@ -1,0 +1,151 @@
+{
+  "initial": [
+    {
+      "name": "native_bench_frappe_apply_document_update",
+      "description": "经用户一次性批准后应用此前预览的 Frappe 业务文档标量字段修改。必须传入完全相同的 changes 和 preview_id；记录或请求变化会使执行失败。运行 Frappe 权限、validate、hooks 和常规版本记录。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "doctype": {
+            "type": "string",
+            "description": "与预览完全相同的业务 DocType。"
+          },
+          "name": {
+            "type": "string",
+            "description": "与预览完全相同的记录名称或编号。"
+          },
+          "changes": {
+            "description": "与预览完全相同的标量字段对象。"
+          },
+          "preview_id": {
+            "type": "string",
+            "description": "预览工具返回的64位 preview_id。"
+          }
+        },
+        "required": [
+          "doctype",
+          "name",
+          "changes",
+          "preview_id"
+        ]
+      }
+    },
+    {
+      "name": "native_bench_frappe_describe_doctype",
+      "description": "读取一个允许访问的 Frappe DocType 的安全元数据，包括模块、字段、字段类型以及当前账号权限。敏感字段不会返回，只读。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "doctype": {
+            "type": "string",
+            "description": "Frappe DocType 名称。"
+          }
+        },
+        "required": [
+          "doctype"
+        ]
+      }
+    },
+    {
+      "name": "native_bench_frappe_get_document",
+      "description": "在当前 Native Bench 的 Frappe 站点中按权限读取一个允许的 DocType 记录。支持字段选择和敏感字段脱敏；禁止任意 SQL，只读。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "doctype": {
+            "type": "string",
+            "description": "Frappe DocType 名称。"
+          },
+          "name": {
+            "type": "string",
+            "description": "记录名称或编号。"
+          },
+          "fields": {
+            "description": "可选字段名数组，最多64个；留空只返回 name。"
+          }
+        },
+        "required": [
+          "doctype",
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "native_bench_frappe_list_documents",
+      "description": "在当前 Native Bench 的 Frappe 站点中按权限查询任意允许的 DocType 列表。支持结构化过滤、排序、分页和字段选择；禁止任意 SQL，敏感字段自动脱敏，只读。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "doctype": {
+            "type": "string",
+            "description": "Frappe DocType 名称，例如 Student、Class 或 Course。"
+          },
+          "fields": {
+            "description": "可选字段名数组，最多64个；留空只返回 name。"
+          },
+          "filters": {
+            "description": "可选过滤对象或 [字段, 运算符, 值] 条件数组；不接受 SQL。"
+          },
+          "order_by": {
+            "type": "string",
+            "description": "可选单字段排序，例如 modified desc。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "返回行数，1至100，默认20。"
+          },
+          "start": {
+            "type": "integer",
+            "description": "分页起点，0至100000，默认0。"
+          }
+        },
+        "required": [
+          "doctype"
+        ]
+      }
+    },
+    {
+      "name": "native_bench_frappe_platform_catalog",
+      "description": "读取当前 Native Bench 站点的已安装应用和当前 Frappe 账号可读取的 DocType 目录，并标注读、写和新建权限。目录来自实时 Frappe 元数据，不读取密码或密钥。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "keyword": {
+            "type": "string",
+            "description": "可选 DocType 或模块名称关键词，支持中文。"
+          },
+          "limit": {
+            "type": "integer",
+            "description": "最多返回的 DocType 数量，1至1000，默认500。"
+          }
+        }
+      }
+    },
+    {
+      "name": "native_bench_frappe_preview_document_update",
+      "description": "预览对一个现有 Frappe 业务文档的标量字段修改。只读取并校验当前记录、字段和写权限，不写数据库；返回绑定当前 modified 状态和请求值的 preview_id。禁止结构、权限、子表和敏感字段变更。",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "doctype": {
+            "type": "string",
+            "description": "现有业务 DocType 名称。"
+          },
+          "name": {
+            "type": "string",
+            "description": "现有记录名称或编号。"
+          },
+          "changes": {
+            "description": "拟修改的标量字段对象，1至32个字段；不接受子表、SQL 或 Python。"
+          }
+        },
+        "required": [
+          "doctype",
+          "name",
+          "changes"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}
