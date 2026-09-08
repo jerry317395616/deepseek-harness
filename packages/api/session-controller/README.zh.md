@@ -33,6 +33,8 @@ Session 对象还承载本地提交回显：`session.beginSubmission` 在调用�
 
 可选的 `@deepseek-ai/dsh-api-session-controller/employee-access` 子路径挂载独立的账号所属会话 API。可选 `promptPreset` 启用请求绑定的轮次；未配置时阻止员工执行。Host 命令不能提供员工授权。[共享员工预览指南](../../../docs/user/guide/employee-shared.zh.md)定义读取配置和持久化要求。员工可以创建会话、查看所属列表和分页历史，并请求限定范围的 Frappe 读取。凭据仅留在请求内存中，执行前后重新验证。搜索、附件、任意写入及全局流仍被拒绝。
 
+员工提示可带可选 UUID `requestId`，用于客户端消息回显对齐。它保留为用户消息关联标识，不代表授权，也不是执行幂等键。
+
 可选 `applicationPreviews: true` 启用通用私有 `application` IPC 操作，包含 `credential`、已验证的 `sessionId`、`action` 和 `arguments`。身份服务负责账号准入、业务校验、预览存储、过期处理、确认幂等和审计。只有身份服务返回 `{ previews: true }` 时，模型才获得预览工具。同源 POST 路由 `session/capabilities`、`session/review` 和 `session/confirm` 重新检查登录及会话归属；确认仅接受 `sessionId`、`preview_id` 和已展示的 `digest`。没有模型工具可以确认。浏览器展示身份服务提供的预览，不把模型文本当成审批；HTTP 结果不明确时必须查询回执，不能重试业务操作。参见[应用预览决策](../../../.agents/notes/implemented/architecture/2026-09-08-application-preview-confirmation.zh.md)。
 
 -----

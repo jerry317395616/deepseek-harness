@@ -214,12 +214,13 @@ export class EmployeeTurns {
    * @param credential - request-private opaque login.
    * @param principal - verified caller pinned for the entire operation.
    * @param signal - HTTP lifetime; disconnect cancels and joins execution.
+   * @param requestId - optional validated client correlation id; grants no ownership or execution authority.
    * @returns settlement acknowledgement, not a claim of business success; read the owned history for results.
    */
   async prompt(sessionId: SessionId, text: string, credential: string,
-    principal: EmployeePrincipal, signal: AbortSignal): Promise<{ settled: true; throughSeq: number }> {
+    principal: EmployeePrincipal, signal: AbortSignal, requestId?: SessionRequestId): Promise<{ settled: true; throughSeq: number }> {
     if (this.runs.has(sessionId)) throw new EmployeeAccessError(503)
-    const run: Run = { credential, principal, signal, requestId: brandString<SessionRequestId>(randomUUID()),
+    const run: Run = { credential, principal, signal, requestId: requestId ?? brandString<SessionRequestId>(randomUUID()),
       entered: false, closed: false, failed: false, previews: false }
     this.runs.set(sessionId, run)
     const cancel = (): void => { this.ctx.agents.get(sessionId)?.cancel({ kind: 'hook', reason: 'Employee request ended.' }) }

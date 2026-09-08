@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-tools'
 import schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
 import type { SessionController } from './index.ts'
+import type { SessionRequestId } from './types.ts'
 import { EmployeeAccessError, EmployeeIdentity, type EmployeePrincipal } from './employee-identity.ts'
 import { EmployeeOwners, sameEmployee } from './employee-owners.ts'
 import { EmployeeTurns } from './employee-turns.ts'
@@ -68,7 +69,8 @@ const readSchema = z.object({
   operation: z.enum(['frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
   arguments: z.record(z.string(), z.unknown()),
 }).strict()
-const promptSchema = z.object({ sessionId: pageSchema.shape.sessionId, text: z.string().min(1).max(6000) }).strict()
+const promptSchema = z.object({ sessionId: pageSchema.shape.sessionId, text: z.string().min(1).max(6000),
+  requestId: z.uuid().optional() }).strict()
 const reviewSchema = z.object({ sessionId: pageSchema.shape.sessionId }).strict()
 const confirmationSchema = reviewSchema.extend({
   preview_id: z.string().min(1).max(140), digest: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -131,7 +133,8 @@ export class EmployeeSessionAccess {
       if (!parsed.success) throw new EmployeeAccessError(400)
       const sessionId = brandString<SessionId>(parsed.data.sessionId)
       await this.owners.assertOwner(sessionId, principal)
-      result = await this.execution.turns.prompt(sessionId, parsed.data.text, credential, principal, signal)
+      result = await this.execution.turns.prompt(sessionId, parsed.data.text, credential, principal, signal,
+        parsed.data.requestId === undefined ? undefined : brandString<SessionRequestId>(parsed.data.requestId))
     } else if (operation === 'read') {
       const parsed = readSchema.safeParse(input)
       if (!parsed.success) throw new EmployeeAccessError(400)

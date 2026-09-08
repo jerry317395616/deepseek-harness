@@ -4,7 +4,7 @@ import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { describe, expect, it, vi } from 'vitest'
-import type { SessionPromptRequest } from '../src/types.ts'
+import type { SessionPromptRequest, SessionRequestId } from '../src/types.ts'
 import { EmployeeTurns } from '../src/employee-turns.ts'
 import { EmployeeAccessError, type EmployeeIdentity } from '../src/employee-identity.ts'
 import type { EmployeeOwners } from '../src/employee-owners.ts'
@@ -66,6 +66,19 @@ function fixture(previews = false) {
 }
 
 describe('request-owned employee turns', () => {
+  it('preserves client correlation without changing turn admission', async () => {
+    const f = fixture()
+    const correlation = 'f491e385-e11d-44c5-b75b-3258e6b345f8' as SessionRequestId
+    try {
+      const pending = f.turns.prompt(f.id, 'Read records', 'opaque', f.principal,
+        new AbortController().signal, correlation)
+      await f.ready
+      expect(f.requestId()).toBe(correlation)
+      expect(await f.step(1, correlation)).toMatchObject({ kind: 'enter' })
+      f.finish()
+      await pending
+    } finally { await f.dispose() }
+  })
   it('exposes only a preview tool, derives the session and never forwards confirmation input', async () => {
     const f = fixture(true)
     try {
