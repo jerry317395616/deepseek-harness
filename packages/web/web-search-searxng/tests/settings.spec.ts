@@ -38,7 +38,9 @@ async function searchOnce(ctx: Context): Promise<string> {
   )
   fetchSpy.mockClear()
   await ctx.web.search({ query: 'anything' })
-  return String(fetchSpy.mock.calls.at(-1)?.[0] ?? '')
+  const endpoint = fetchSpy.mock.calls.at(-1)?.[0]
+  if (!(endpoint instanceof URL)) throw new Error('Expected a SearXNG URL request')
+  return endpoint.href
 }
 
 afterEach(() => {

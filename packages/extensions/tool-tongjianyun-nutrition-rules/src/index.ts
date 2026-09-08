@@ -260,7 +260,7 @@ export function apply(ctx: Context, config: Config): void {
     timeoutMs: config.timeoutMs,
     execute: (arguments_, exec) => {
       assertRuleLimit(arguments_.limit)
-      return call('frappe_list_tongjianyun_nutrition_rules', arguments_ as Record<string, JsonValue>, exec.signal)
+      return call('frappe_list_tongjianyun_nutrition_rules', arguments_, exec.signal)
     },
   })))
 
@@ -312,7 +312,7 @@ export function apply(ctx: Context, config: Config): void {
     timeoutMs: config.timeoutMs,
     execute: (arguments_, exec) => {
       if (arguments_.confirmation !== '确认发布') throw new Error('发布需要精确确认文本“确认发布”')
-      return call('frappe_publish_tongjianyun_nutrition_rule', arguments_ as Record<string, JsonValue>, exec.signal)
+      return call('frappe_publish_tongjianyun_nutrition_rule', arguments_, exec.signal)
     },
   })))
 
@@ -328,7 +328,7 @@ export function apply(ctx: Context, config: Config): void {
     timeoutMs: config.timeoutMs,
     execute: (arguments_, exec) => {
       if (arguments_.confirmation !== '确认回滚') throw new Error('回滚需要精确确认文本“确认回滚”')
-      return call('frappe_rollback_tongjianyun_nutrition_rule', arguments_ as Record<string, JsonValue>, exec.signal)
+      return call('frappe_rollback_tongjianyun_nutrition_rule', arguments_, exec.signal)
     },
   })))
 }
@@ -349,7 +349,7 @@ async function publishReport({
   downloadName,
 }: {
   filePath: unknown
-  downloadName: unknown
+  downloadName: string | undefined
 }): Promise<JsonValue> {
   if (typeof filePath !== 'string' || filePath.trim() === '') {
     throw new Error('file_path 必须是已生成文件的绝对路径')
@@ -361,9 +361,9 @@ async function publishReport({
     throw new Error('只能发布 /home/frappe、/workspace 或 /home/zyd/frappe-direct 下的文件')
   }
 
-  const requestedName = downloadName === undefined || downloadName === null
+  const requestedName = downloadName === undefined
     ? basename(source)
-    : String(downloadName).trim()
+    : downloadName.trim()
   if (requestedName === '' || requestedName === '.' || requestedName === '..'
     || requestedName.includes('/') || requestedName.includes('\\')) {
     throw new Error('download_name 必须是不含目录分隔符的文件名')

@@ -45,7 +45,10 @@ afterEach(async () => {
   await context?.fiber.dispose()
   context = undefined
   if (server !== undefined) {
-    await new Promise<void>((resolve, reject) => server!.close(error => error === undefined ? resolve() : reject(error)))
+    await new Promise<void>((resolve, reject) => server!.close((error) => {
+      if (error === undefined) resolve()
+      else reject(error)
+    }))
   }
   server = undefined
   if (root !== undefined) await rm(root, { recursive: true, force: true })
@@ -55,21 +58,27 @@ afterEach(async () => {
 /** Start a deterministic authenticated Frappe-MCP test endpoint. */
 async function startFrappeMcp(): Promise<{ endpoint: string; requests: FrappeRequest[] }> {
   const requests: FrappeRequest[] = []
-  server = createServer(async (request, response) => {
-    let raw = ''
-    for await (const chunk of request) raw += String(chunk)
-    const body = JSON.parse(raw) as FrappeRequest['body']
-    requests.push({ authorization: request.headers.authorization, body })
-    response.writeHead(200, { 'content-type': 'application/json' })
-    response.end(JSON.stringify({
-      jsonrpc: '2.0',
-      id: body.id,
-      result: {
-        content: [{ type: 'text', text: `completed ${body.params.name}` }],
-        isError: false,
-        structuredContent: { operation: body.params.name, rule_set: 'NUTRITION-RULE-0001' },
-      },
-    }))
+  server = createServer((request, response) => {
+    // Keep asynchronous request failures inside the HTTP fixture boundary.
+    async function respond(): Promise<void> {
+      let raw = ''
+      for await (const chunk of request) raw += String(chunk)
+      const body = JSON.parse(raw) as FrappeRequest['body']
+      requests.push({ authorization: request.headers.authorization, body })
+      response.writeHead(200, { 'content-type': 'application/json' })
+      response.end(JSON.stringify({
+        jsonrpc: '2.0',
+        id: body.id,
+        result: {
+          content: [{ type: 'text', text: `completed ${body.params.name}` }],
+          isError: false,
+          structuredContent: { operation: body.params.name, rule_set: 'NUTRITION-RULE-0001' },
+        },
+      }))
+    }
+    respond().catch((error: unknown) => {
+      response.destroy(error instanceof Error ? error : new Error('Frappe-MCP fixture request failed'))
+    })
   })
   await new Promise<void>((resolve, reject) => {
     server!.once('error', reject)

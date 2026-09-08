@@ -71,12 +71,12 @@ describe('SearxngSearchProvider', () => {
     baseURL = 'https://second.test/api/'
     await search.search({ query: 'weekly menu' })
 
-    expect(String(fetchSpy.mock.calls[0]?.[0])).toBe(
+    expect(fetchSpy.mock.calls[0]?.[0]).toEqual(new URL(
       'https://first.test/root/search?q=%E5%B9%BC%E5%84%BF+%E8%90%A5%E5%85%BB&format=json',
-    )
-    expect(String(fetchSpy.mock.calls[1]?.[0])).toBe(
+    ))
+    expect(fetchSpy.mock.calls[1]?.[0]).toEqual(new URL(
       'https://second.test/api/search?q=weekly+menu&format=json',
-    )
+    ))
     expect(fetchSpy.mock.calls[0]?.[1]).toMatchObject({
       method: 'GET',
       redirect: 'error',
@@ -116,8 +116,9 @@ describe('SearxngSearchProvider', () => {
       .rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR', message: 'SearXNG returned no results array' })
 
     fetchSpy.mockResolvedValueOnce(new Response('not json', { status: 200 }))
-    await expect(provider().search({ query: 'invalid success body' }))
-      .rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR', message: expect.stringContaining('unprocessable response body') })
+    const invalidBody = provider().search({ query: 'invalid success body' })
+    await expect(invalidBody).rejects.toMatchObject({ code: 'WEB_PROVIDER_ERROR' })
+    await expect(invalidBody).rejects.toThrow('unprocessable response body')
 
     fetchSpy.mockResolvedValueOnce({
       ok: true,

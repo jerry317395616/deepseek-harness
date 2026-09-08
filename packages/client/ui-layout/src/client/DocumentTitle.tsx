@@ -1,7 +1,5 @@
 import { useEffect } from 'react'
 
-const DEFAULT_CLIENT_TITLE = 'ione harness'
-
 /** Props for the browser title projection. */
 export interface DocumentTitleProps {
   /** Durable title of the selected session, or undefined for the product title. */
@@ -16,7 +14,7 @@ export interface DocumentTitleProps {
  * @param props - Selected session title projection.
  * @returns No rendered content.
  */
-export function DocumentTitle({ title, productTitle = DEFAULT_CLIENT_TITLE }: DocumentTitleProps): null {
+export function DocumentTitle({ title, productTitle }: DocumentTitleProps): null {
   useEffect(() => {
     document.title = title === undefined ? productTitle : `${title} — ${productTitle}`
     return () => { document.title = productTitle }
