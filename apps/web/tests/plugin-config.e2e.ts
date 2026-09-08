@@ -75,13 +75,11 @@ describe('web e2e: plugin configuration section', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-cards'))
     const dialog = await openPlugins()
 
-    // Every card the shipped web composition exposes: the shell executor, the
-    // agent loop, subagent selection, and the DeepSeek search provider.
-    await dialog.getByText('Subagent', { exact: true }).waitFor({ timeout: 10_000 })
-    expect(await dialog.getByRole('button', { name: '展开设置: Subagent' }).count()).toBe(1)
+    // Cards require both a Host namespace and a Client registration. The base
+    // composition serves DeepSeek search, not the Client card's SearXNG namespace.
     await dialog.getByText('终端', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByText('Agent 循环', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('网页搜索', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('网页搜索', { exact: true }).count()).toBe(0)
     // Collapsed: a card's fields appear only once it is expanded.
     expect(await dialog.getByLabel('命令超时（毫秒）').count()).toBe(0)
 
@@ -90,44 +88,14 @@ describe('web e2e: plugin configuration section', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('persists selected adapter routes as the subagent model allowlist', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-subagent-model-selection'))
+  it('does not expose the removed subagent model-selection card', async () => {
     const dialog = await openPlugins()
-    await dialog.getByText('Subagent', { exact: true }).click()
-    const toggle = dialog.getByRole('switch', { name: '允许 Agent 为 Subagent 选择模型' })
-
-    await toggle.click()
-    const models = dialog.getByRole('group', { name: 'Agent 可选择的模型' })
-    await models.waitFor({ timeout: 10_000 })
-    const firstModel = models.getByRole('checkbox').first()
-    await firstModel.check()
-    await dialog.getByRole('button', { name: '保存', exact: true }).click()
-
-    const expandSubagent = dialog.getByRole('button', { name: '展开设置: Subagent' })
-    await expandSubagent.waitFor({ timeout: 5_000 })
-    await expect.poll(async () => (await settingsDocument()).includes('subagent-model-selection:'), { timeout: 10_000 })
-      .toBe(true)
-    expect(await settingsDocument()).toContain('enabled: true')
-    expect(await settingsDocument()).toContain('allowedModels:')
-    expect(await settingsDocument()).toContain('provider:')
-    expect(await settingsDocument()).toContain('model:')
-    await expandSubagent.click()
-    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: 5_000 }).toBe('true')
-    await expect.poll(() => dialog.getByRole('button', { name: '保存', exact: true }).isDisabled()).toBe(true)
-    expect(await dialog.getByText('未保存', { exact: true }).count()).toBe(0)
-
-    await toggle.click()
-    await dialog.getByRole('button', { name: '保存', exact: true }).click()
-    await expandSubagent.waitFor({ timeout: 5_000 })
-    await expect.poll(async () => (await settingsDocument()).includes('enabled: false'), { timeout: 10_000 })
-      .toBe(true)
-    expect(await settingsDocument()).toContain('allowedModels:')
-    expect(await settingsDocument()).toContain('provider:')
-    expect(await settingsDocument()).toContain('model:')
-    await expandSubagent.click()
-    await expect.poll(() => toggle.getAttribute('aria-checked'), { timeout: 5_000 }).toBe('false')
+    await dialog.getByText('终端', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await dialog.getByRole('button', { name: '展开设置: Subagent' }).count()).toBe(0)
+    expect(await dialog.getByRole('switch', { name: '允许 Agent 为 Subagent 选择模型' }).count()).toBe(0)
+    expect(await settingsDocument()).not.toContain('subagent-model-selection:')
     expect(tripwire.pageErrors).toEqual([])
-  }, 60_000)
+  })
 
   it('stages an edit and writes it only when saved', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-write'))
