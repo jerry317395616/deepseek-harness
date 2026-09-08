@@ -8,6 +8,7 @@ import { brandString } from '@deepseek-ai/dsh-brand'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionSummary } from '../src/types.ts'
 import { EmployeeSessionAccess } from '../src/employee-access.ts'
+import type { EmployeeTurns } from '../src/employee-turns.ts'
 import { EmployeeOwners } from '../src/employee-owners.ts'
 import { EmployeeAccessError, type EmployeePrincipal } from '../src/employee-identity.ts'
 
@@ -45,6 +46,27 @@ async function fixture() {
 }
 
 describe.skipIf(process.platform !== 'linux')('shared session access', () => {
+  it('requires image opt-in and owns the session before forwarding image content', async () => {
+    const f = await fixture()
+    const prompt = vi.fn(async () => ({ settled: true as const, throughSeq: 0 }))
+    const execution = { preset: 'shared', turns: { prompt } as unknown as EmployeeTurns }
+    const access = new EmployeeSessionAccess(f.controller, f.owners, f.identity, f.materialize,
+      execution, undefined, undefined, true)
+    const created = await f.access.execute('create', {}, 'a', signal) as { sessionId: SessionId }
+    const images = [{ type: 'image', mediaType: 'image/png', data: 'AQ==' }]
+    const input = { ...created, text: 'Describe', images }
+    await access.execute('prompt', input, 'a', signal)
+    expect(prompt).toHaveBeenCalledWith(created.sessionId, 'Describe', 'a', a, signal, undefined, images)
+    await expect(access.execute('prompt', input, 'b', signal)).rejects.toMatchObject({ status: 404 })
+    const disabled = new EmployeeSessionAccess(f.controller, f.owners, f.identity, f.materialize, execution)
+    await expect(disabled.execute('prompt', input, 'a', signal)).rejects.toMatchObject({ status: 400 })
+    for (const invalid of [{ ...input, user: 'Administrator' }, { ...input, images: Array.from({ length: 5 }, () => images[0]) },
+      { ...input, images: [{ ...images[0], data: '/etc/passwd' }] },
+      { ...input, images: [{ ...images[0], mediaType: 'application/pdf' }] }]) {
+      await expect(access.execute('prompt', invalid, 'a', signal)).rejects.toMatchObject({ status: 400 })
+    }
+    expect(prompt).toHaveBeenCalledTimes(1)
+  })
   it('creates two concurrent account-owned sessions and rejects cross-account reads at the executor', async () => {
     const f = await fixture()
     const [left, right] = await Promise.all([

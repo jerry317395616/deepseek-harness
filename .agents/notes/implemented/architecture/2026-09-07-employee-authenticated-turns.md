@@ -16,6 +16,8 @@ Every model request and read revalidates the same account. The scoped read tool 
 
 ## Alternatives considered
 
+Image prompts require explicit deployment opt-in and use the same request-owned turn. The native image admission validates and persists image content; the employee executor retains identity and tool restrictions outside that content. The HTTP prompt limit is configurable separately from other operations, and the wire input accepts at most four images. Images are input data, not a source of authorization.
+
 **Use a deployment-global Frappe user.** That would return another employee's records when two logins overlap. The authority resolves each opaque login independently and Frappe remains responsible for document permissions.
 
 **Keep authorization until a session ends.** Sessions survive logout and process restart. Request-owned credentials expire with the active HTTP operation and cannot authorize replayed inbox messages.
@@ -26,4 +28,4 @@ Every model request and read revalidates the same account. The scoped read tool 
 
 The [process tests](../../../../apps/cli/tests/profiles/employee-readonly/employee-turns.expected.e2e.ts) verify two scoped identities, concurrent active accounts, overlap denial, cancellation, logout and reuse after settlement. [Unit tests](../../../../packages/api/session-controller/tests/employee-turns.host.spec.ts) exercise unrelated turn rejection, pre-model disablement, direct tool-body denial and post-read revocation. The [recorded session](../../../../snapshots/web/employee-shared-readonly/session.jsonl) pins the authenticated query and permission-scoped result. Tests substitute model output and business data, not the Agent or tool runtime in process scenarios.
 
-This extends the [ownership preview](2026-09-07-shared-session-ownership.md), not its production deployment. Real browser SSO, shared chat UI, live-site permission acceptance and load testing remain absent. The response reports settlement and a history cursor, not business success. Business writes, arbitrary code, schema changes, attachments and global employee event streams remain unavailable. The one-UID deployment retains application-level separation, not isolation from unrestricted code running as that UID.
+This extends the [ownership preview](2026-09-07-shared-session-ownership.md), not its production deployment. The response reports settlement and a history cursor, not business success. Arbitrary code, schema changes, non-image files and global employee event streams remain unavailable. The one-UID deployment retains application-level separation, not isolation from unrestricted code running as that UID.

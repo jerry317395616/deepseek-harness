@@ -35,6 +35,8 @@ Session 对象还承载本地提交回显：`session.beginSubmission` 在调用�
 
 员工提示可带可选 UUID `requestId`，用于客户端消息回显对齐。它保留为用户消息关联标识，不代表授权，也不是执行幂等键。
 
+部署显式设置 `allowImages: true` 后，可随文本提交最多四个 base64 图片片段。`maxPromptBytes` 限制完整提示 JSON（省略时为 8192 字节）；其他操作仍限制为 8192 字节。原生附件准入在记录图片前检查媒体类型、解码内容、尺寸、合计大小及模型支持。图片内容不授予额外工具权限。
+
 可选 `applicationPreviews: true` 启用通用私有 `application` IPC 操作，包含 `credential`、已验证的 `sessionId`、`action` 和 `arguments`。身份服务负责账号准入、业务校验、预览存储、过期处理、确认幂等和审计。只有身份服务返回 `{ previews: true }` 时，模型才获得预览工具。同源 POST 路由 `session/capabilities`、`session/review` 和 `session/confirm` 重新检查登录及会话归属；确认仅接受 `sessionId`、`preview_id` 和已展示的 `digest`。没有模型工具可以确认。浏览器展示身份服务提供的预览，不把模型文本当成审批；HTTP 结果不明确时必须查询回执，不能重试业务操作。参见[应用预览决策](../../../.agents/notes/implemented/architecture/2026-09-08-application-preview-confirmation.zh.md)。
 
 -----
@@ -75,7 +77,7 @@ Session 对象还承载本地提交回显：`session.beginSubmission` 在调用�
 - Control baseline 表示进程本地状态，因此 Host 重启后无法重建 jobs。
 - follow 恢复失败会对调用方可见，而不会无限重试。
 - 文件引用补全使用共享 Agent lookup，因此可能恢复冷 Session；`skills/list` 目录是不激活 Agent 的 skill 元数据读取路径。
-- 员工轮次每个会话只接受一个活动文本请求，不提供流式界面或自动执行恢复；超时及断开会取消并等待本地执行结束。
+- 员工轮次每个会话只接受一个活动请求，不提供流式界面或自动执行恢复；超时及断开会取消并等待本地执行结束。
 
 
 <a id="dev-note"></a>

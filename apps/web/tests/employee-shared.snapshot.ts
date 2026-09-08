@@ -23,10 +23,13 @@ it.skipIf(process.platform !== 'linux').each([false, true])('replays authenticat
   const content = user.data.content[0]
   if (content?.type !== 'text') throw new Error('shared fixture requires text')
   const authority = await startSharedAuthority(disposers)
-  const host = await startEmployee(disposers, 'shared', 'http://127.0.0.1:1', undefined, file, true, { ...authority, applicationPreviews })
+  const host = await startEmployee(disposers, 'shared', 'http://127.0.0.1:1', undefined, file, true,
+    { ...authority, applicationPreviews, allowImages: !applicationPreviews })
   const employee = await sharedLogin(host.origin, authority.ticket('teacher@example.test'))
   const created = await (await employee.raw('/employee/session/create')).json() as { sessionId: string }
-  const result = await employee.raw('/employee/session/prompt', { sessionId: created.sessionId, text: content.text })
+  const image = await readFile(new URL('../../../snapshots/session/read-image/workspace/red.png', import.meta.url))
+  const result = await employee.raw('/employee/session/prompt', { sessionId: created.sessionId, text: content.text,
+    ...(!applicationPreviews ? { images: [{ type: 'image', mediaType: 'image/png', data: image.toString('base64') }] } : {}) })
   expect(result.status, host.safeLog()).toBe(200)
   const raw = await logs(host.home)
   expect(raw).toContain(applicationPreviews ? 'synthetic-preview' : 'synthetic-teacher')

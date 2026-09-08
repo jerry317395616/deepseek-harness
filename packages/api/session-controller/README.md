@@ -35,6 +35,8 @@ The opt-in `@deepseek-ai/dsh-api-session-controller/employee-access` subpath mou
 
 Employee prompts accept an optional UUID `requestId` for client echo reconciliation. It is retained as the user message correlation ID, not as authority or an execution idempotency key.
 
+Deployment opt-in `allowImages: true` accepts up to four base64 image parts alongside text. `maxPromptBytes` bounds complete prompt JSON (8192 bytes when omitted); other operations retain their 8192-byte limit. Native attachment admission checks media, decoded content, dimensions, aggregate size and model support before recording images. Image content grants no additional tool permissions.
+
 Optional `applicationPreviews: true` enables a generic private `application` IPC operation with `credential`, verified `sessionId`, `action` and `arguments`. The authority owns account admission, business validation, preview storage, expiry, confirmation idempotence and auditing. The model receives only a preview tool when the authority returns `{ previews: true }`. Same-origin POST routes `session/capabilities`, `session/review` and `session/confirm` recheck login and session ownership; confirmation accepts only `sessionId`, `preview_id` and the displayed `digest`. No model tool can confirm. Browser clients render authority-provided previews, never model text as approval, and must query receipts after uncertain HTTP outcomes rather than retry the business action. See the [application preview decision](../../../.agents/notes/implemented/architecture/2026-09-08-application-preview-confirmation.md).
 
 -----
@@ -75,7 +77,7 @@ Read results append to the existing prefix. A preset or tool-schema change can i
 - Control baselines represent process-local state and therefore cannot reconstruct jobs after a Host restart.
 - A failed follow resumption remains visible to the caller instead of retrying indefinitely.
 - File-reference completion uses the shared Agent lookup and can resume a cold Session; the `skills/list` catalog is the non-activating alternative for skill metadata.
-- Employee turns accept one active text request per session, with no streaming UI or automatic execution resumption; timeout and disconnect cancel and join local execution.
+- Employee turns accept one active request per session, with no streaming UI or automatic execution resumption; timeout and disconnect cancel and join local execution.
 
 
 <a id="dev-note"></a>

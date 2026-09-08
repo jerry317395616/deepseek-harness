@@ -6,7 +6,7 @@ import type { SessionId } from '@deepseek-ai/dsh-session'
 import { brandString } from '@deepseek-ai/dsh-brand'
 import { defineTool, type ToolDefinition, type ToolExecution } from '@deepseek-ai/dsh-tools'
 import { z } from 'zod'
-import type { SessionRequestId } from './types.ts'
+import type { PromptContentPart, SessionRequestId } from './types.ts'
 import { EmployeeAccessError, type EmployeeIdentity, type EmployeePrincipal } from './employee-identity.ts'
 import { type EmployeeOwners, sameEmployee } from './employee-owners.ts'
 
@@ -215,10 +215,12 @@ export class EmployeeTurns {
    * @param principal - verified caller pinned for the entire operation.
    * @param signal - HTTP lifetime; disconnect cancels and joins execution.
    * @param requestId - optional validated client correlation id; grants no ownership or execution authority.
+   * @param images - validated image parts; native admission persists and checks them before the turn.
    * @returns settlement acknowledgement, not a claim of business success; read the owned history for results.
    */
   async prompt(sessionId: SessionId, text: string, credential: string,
-    principal: EmployeePrincipal, signal: AbortSignal, requestId?: SessionRequestId): Promise<{ settled: true; throughSeq: number }> {
+    principal: EmployeePrincipal, signal: AbortSignal, requestId?: SessionRequestId,
+    images: readonly Extract<PromptContentPart, { type: 'image' }>[] = []): Promise<{ settled: true; throughSeq: number }> {
     if (this.runs.has(sessionId)) throw new EmployeeAccessError(503)
     const run: Run = { credential, principal, signal, requestId: requestId ?? brandString<SessionRequestId>(randomUUID()),
       entered: false, closed: false, failed: false, previews: false }
@@ -236,7 +238,7 @@ export class EmployeeTurns {
         if (run.previews && existing !== undefined) this.registerPreview(existing)
       }
       await this.ctx.sessionController.prompt({ sessionId, requestId: run.requestId,
-        mode: 'queue', content: [{ type: 'text', text }] }, signal)
+        mode: 'queue', content: [{ type: 'text', text }, ...images] }, signal)
       if (signal.aborted) cancel()
       const agent = this.ctx.agents.get(sessionId)
       if (agent === undefined) throw new EmployeeAccessError(503)

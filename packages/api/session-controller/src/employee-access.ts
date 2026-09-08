@@ -42,6 +42,10 @@ export interface Config {
   promptPreset?: string
   /** Enable application-owned previews and separate same-origin browser confirmation. */
   applicationPreviews?: boolean
+  /** Explicit image-prompt opt-in; native attachment and model validation still apply. */
+  allowImages?: boolean
+  /** Serialized prompt request limit; other operations retain the 8192-byte limit. */
+  maxPromptBytes?: number
 }
 
 export const Config: schema<Config> = schema.object({
@@ -54,6 +58,8 @@ export const Config: schema<Config> = schema.object({
   maxResponseBytes: schema.number().step(1).min(1024).max(5000000),
   promptPreset: schema.string(),
   applicationPreviews: schema.boolean(),
+  allowImages: schema.boolean(),
+  maxPromptBytes: schema.number().step(1).min(8192).max(10000000),
 })
 
 const COOKIE = '__Host-dsh-shared'
@@ -70,7 +76,11 @@ const readSchema = z.object({
   arguments: z.record(z.string(), z.unknown()),
 }).strict()
 const promptSchema = z.object({ sessionId: pageSchema.shape.sessionId, text: z.string().min(1).max(6000),
-  requestId: z.uuid().optional() }).strict()
+  requestId: z.uuid().optional(), images: z.array(z.object({
+    type: z.literal('image'), mediaType: z.enum(['image/png', 'image/jpeg', 'image/webp', 'image/gif']),
+    data: z.string().min(4).max(10000000).regex(/^[A-Za-z0-9+/]+={0,2}$/u).refine(value => value.length % 4 === 0),
+    name: z.string().max(255).optional(),
+  }).strict()).min(1).max(4).optional() }).strict()
 const reviewSchema = z.object({ sessionId: pageSchema.shape.sessionId }).strict()
 const confirmationSchema = reviewSchema.extend({
   preview_id: z.string().min(1).max(140), digest: z.string().regex(/^[a-f0-9]{64}$/u),
@@ -86,6 +96,7 @@ export class EmployeeSessionAccess {
    * @param execution - optional deployment-owned authenticated turn executor.
    * @param application - optional private application preview and confirmation transport.
    * @param currentCursor - obtain a current history boundary after the ownership check.
+   * @param allowImages - deployment opt-in for images; false rejects them before execution.
    */
   constructor(
     private readonly controller: Pick<SessionController, 'create' | 'list' | 'page'>,
@@ -95,6 +106,7 @@ export class EmployeeSessionAccess {
     private readonly execution?: { preset: string; turns: EmployeeTurns },
     private readonly application?: Pick<EmployeeIdentity, 'application'>,
     private readonly currentCursor?: (sessionId: SessionId, signal: AbortSignal) => Promise<number>,
+    private readonly allowImages = false,
   ) {}
 
   private async recheck(credential: string, principal: EmployeePrincipal, signal: AbortSignal): Promise<void> {
@@ -131,10 +143,12 @@ export class EmployeeSessionAccess {
     } else if (operation === 'prompt' && this.execution !== undefined) {
       const parsed = promptSchema.safeParse(input)
       if (!parsed.success) throw new EmployeeAccessError(400)
+      if (parsed.data.images !== undefined && !this.allowImages) throw new EmployeeAccessError(400)
       const sessionId = brandString<SessionId>(parsed.data.sessionId)
       await this.owners.assertOwner(sessionId, principal)
       result = await this.execution.turns.prompt(sessionId, parsed.data.text, credential, principal, signal,
-        parsed.data.requestId === undefined ? undefined : brandString<SessionRequestId>(parsed.data.requestId))
+        parsed.data.requestId === undefined ? undefined : brandString<SessionRequestId>(parsed.data.requestId),
+        parsed.data.images?.map(({ name, ...image }) => ({ ...image, ...(name === undefined ? {} : { name }) })))
     } else if (operation === 'read') {
       const parsed = readSchema.safeParse(input)
       if (!parsed.success) throw new EmployeeAccessError(400)
@@ -187,7 +201,7 @@ function send(response: ServerResponse, status: number, value?: string, headers:
   response.end(value)
 }
 
-async function body(request: IncomingMessage, signal: AbortSignal): Promise<unknown> {
+async function body(request: IncomingMessage, signal: AbortSignal, maxBytes: number): Promise<unknown> {
   if (request.headers['content-type']?.split(';', 1)[0]?.trim() !== 'application/json') throw new EmployeeAccessError(400)
   let size = 0
   const chunks: Buffer[] = []
@@ -195,7 +209,7 @@ async function body(request: IncomingMessage, signal: AbortSignal): Promise<unkn
     signal.throwIfAborted()
     const bytes = chunk as Buffer
     size += bytes.length
-    if (size > 8192) throw new EmployeeAccessError(413)
+    if (size > maxBytes) throw new EmployeeAccessError(413)
     chunks.push(bytes)
   }
   try { return JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))) as unknown }
@@ -240,7 +254,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   }, execution, config.applicationPreviews === true ? identity : undefined, async (sessionId, signal) => {
     using observation = await ctx.sessionQuery.observeSession(sessionId, { signal, projectionMode: 'none' })
     return observation.cursor
-  })
+  }, config.allowImages === true)
   const requests = new Map<Promise<void>, AbortController>()
   let closing = false
 
@@ -284,7 +298,8 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       }
       const operation = /^\/employee\/session\/(create|list|page|read|prompt|capabilities|review|confirm)$/u.exec(url.pathname)?.[1]
       if (operation === undefined) throw new EmployeeAccessError(404)
-      const result = await access.execute(operation, await body(req, abort.signal), login, abort.signal)
+      const limit = operation === 'prompt' && config.allowImages === true ? (config.maxPromptBytes ?? 8192) : 8192
+      const result = await access.execute(operation, await body(req, abort.signal, limit), login, abort.signal)
       const serialized = JSON.stringify(result)
       if (Buffer.byteLength(serialized) > config.maxResponseBytes) throw new EmployeeAccessError(503)
       send(res, 200, serialized)

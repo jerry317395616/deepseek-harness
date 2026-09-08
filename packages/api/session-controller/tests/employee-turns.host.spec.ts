@@ -36,6 +36,7 @@ function fixture(previews = false) {
     action === 'capabilities' ? { previews } : { preview_id: 'synthetic-preview', state: 'awaiting_confirmation' }) }
   const owners = { blocksExecution: (candidate: SessionId) => candidate === id, assertOwner: vi.fn(async () => {}) }
   let requestId = ''
+  let content: SessionPromptRequest['content'] = []
   const ctx = {
     on(name: string, callback: (...args: unknown[]) => unknown) { handlers.set(name, callback) },
     effect(callback: () => () => unknown) { effects.push(callback()) },
@@ -44,6 +45,7 @@ function fixture(previews = false) {
     sessionProjections: { stateOf: () => 'shared' },
     sessionController: { async prompt(request: SessionPromptRequest) {
       requestId = request.requestId
+      content = request.content
       activity = gate
       entered()
       return { accepted: true }
@@ -60,12 +62,27 @@ function fixture(previews = false) {
   return { turns, principal, id, ready, finish, step, agent, identity, definitions,
     disable() { enabled = false },
     requestId: () => requestId,
+    content: () => content,
     request: () => handlers.get('agent/request')?.({ agent, turn: 1, signal: new AbortController().signal }, async () => ({})),
     async dispose() { finish(); await activity; for (const effect of effects.reverse()) await effect() },
   }
 }
 
 describe('request-owned employee turns', () => {
+  it('forwards images through native admission without granting tool authority', async () => {
+    const f = fixture()
+    try {
+      const image = { type: 'image' as const, mediaType: 'image/png' as const, data: 'AQ==' }
+      const pending = f.turns.prompt(f.id, 'Describe', 'opaque', f.principal,
+        new AbortController().signal, undefined, [image])
+      await f.ready
+      expect(f.content()).toEqual([{ type: 'text', text: 'Describe' }, image])
+      expect(await f.step(1, f.requestId())).toMatchObject({ kind: 'enter' })
+      expect(f.definitions.map(tool => tool.name)).toEqual(['employee_frappe_read'])
+      f.finish()
+      await pending
+    } finally { await f.dispose() }
+  })
   it('preserves client correlation without changing turn admission', async () => {
     const f = fixture()
     const correlation = 'f491e385-e11d-44c5-b75b-3258e6b345f8' as SessionRequestId
