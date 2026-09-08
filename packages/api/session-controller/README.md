@@ -31,7 +31,9 @@ The Client adapter exposes `SessionEventStream`, a Gateway `RemoteJournalStream`
 
 The Session object also carries local submission echoes: `session.beginSubmission` inserts one into `SessionSnapshot.pendingSubmissions` synchronously, before the caller serializes and prompts, so a conversation UI can show the message on the submit click's own frame. Session derives each echo's `transcript`, `queued`, or `steering` placement from its current running state and the requested delivery mode, then retains that placement while serialization is in flight. The prompt's `requestId` is the correlation identity: the Host echoes it as the durable user source's `rpcId`, and queue occurrences project it as `SessionQueuedItem.rpcId`. An echo retires one animation frame after its durable event or queue occurrence is observed (the delay keeps it renderable until the replacement is ready), immediately when its identified prompt fails or is abandoned, and as failed on disposal; each retirement fires the registered `onRetire` callback exactly once. Echoes are Client memory only; reload and reconnect rebuild the conversation from durable events alone.
 
-The opt-in `@deepseek-ai/dsh-api-session-controller/employee-access` subpath mounts a separate account-owned session API. Optional `promptPreset` enables request-bound read-only turns; without it, employee execution is blocked. Host commands cannot supply employee authority. The [shared employee preview guide](../../../docs/user/guide/employee-shared.md) owns configuration, persistence and deployment requirements. Employees can create, list and page owned sessions and request scoped Frappe reads. Authenticated prompts retain credentials only in request memory, revalidate before model requests and around reads, and record tool results in owned history. Search, attachments, writes and global streams remain denied.
+The opt-in `@deepseek-ai/dsh-api-session-controller/employee-access` subpath mounts a separate account-owned session API. Optional `promptPreset` enables request-bound turns; without it, employee execution is blocked. Host commands cannot supply employee authority. The [shared employee preview guide](../../../docs/user/guide/employee-shared.md) owns read configuration and persistence requirements. Employees can create, list and page owned sessions and request scoped Frappe reads. Credentials remain in request memory and are revalidated around execution. Search, attachments, arbitrary writes and global streams remain denied.
+
+Optional `applicationPreviews: true` enables a generic private `application` IPC operation with `credential`, verified `sessionId`, `action` and `arguments`. The authority owns account admission, business validation, preview storage, expiry, confirmation idempotence and auditing. The model receives only a preview tool when the authority returns `{ previews: true }`. Same-origin POST routes `session/capabilities`, `session/review` and `session/confirm` recheck login and session ownership; confirmation accepts only `sessionId`, `preview_id` and the displayed `digest`. No model tool can confirm. Browser clients render authority-provided previews, never model text as approval, and must query receipts after uncertain HTTP outcomes rather than retry the business action. See the [application preview decision](../../../.agents/notes/implemented/architecture/2026-09-08-application-preview-confirmation.md).
 
 -----
 
@@ -54,11 +56,11 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 #### What the model sees
 
-The configured owned preset receives the [employee read schema](../../../docs/tool-catalog.md#deepseek-aidsh-api-session-controller). Tool results contain permission-filtered JSON text; credentials and owner records are excluded. Other tools are denied, including actorless calls, with `Employee Agent execution is unavailable.`
+The configured owned preset receives the [employee tool schemas](../../../docs/tool-catalog.md#deepseek-aidsh-api-session-controller). An admitted preview tool prepares changes for independent human confirmation and never reports execution itself. Results contain application-filtered JSON text; credentials and owner records are excluded. Other tools are denied, including actorless calls, with `Employee Agent execution is unavailable.`
 
 #### Token effect
 
-The tool schema is stable per preset. Query results append to history and are bounded by the authority's 262144-byte response limit; provider token limits remain independent.
+The preview schema is added only for an authority-admitted account. Results append to history and are bounded by the authority's 262144-byte response limit; provider token limits remain independent.
 
 #### KV Cache effect
 

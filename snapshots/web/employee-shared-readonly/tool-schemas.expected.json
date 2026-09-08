@@ -11,7 +11,9 @@
             "description": "frappe_describe_doctype, frappe_list_documents or frappe_get_document."
           },
           "arguments": {
-            "description": "Structured query: doctype; optional fields, filters, order_by, limit, start; name for one record."
+            "type": "object",
+            "description": "Structured query object: doctype; optional fields, filters, order_by, limit, start; name for one record.",
+            "additionalProperties": true
           }
         },
         "required": [

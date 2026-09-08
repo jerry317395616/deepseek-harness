@@ -1,0 +1,49 @@
+{
+  "initial": [
+    {
+      "name": "employee_application_preview",
+      "description": "Prepare a requested business change for human review using the current login. Read the application metadata first for supported operations and arguments. This does not execute the change. Never claim success before the user separately confirms the preview.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "Application-supported preview operation from its metadata."
+          },
+          "arguments": {
+            "type": "object",
+            "description": "Structured application argument object. Never include an account, site, session, confirmation, SQL or executable code.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "operation",
+          "arguments"
+        ]
+      }
+    },
+    {
+      "name": "employee_frappe_read",
+      "description": "Read permitted Frappe metadata, lists or one record using your current login. Never supply an account, site, SQL or executable code.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "operation": {
+            "type": "string",
+            "description": "frappe_describe_doctype, frappe_list_documents or frappe_get_document."
+          },
+          "arguments": {
+            "type": "object",
+            "description": "Structured query object: doctype; optional fields, filters, order_by, limit, start; name for one record.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "operation",
+          "arguments"
+        ]
+      }
+    }
+  ],
+  "changes": []
+}

@@ -1,6 +1,7 @@
 /** Bounded IPC client for the trusted shared-runtime identity authority. */
 import { createConnection } from 'node:net'
 import { z } from 'zod'
+import type { SessionId } from '@deepseek-ai/dsh-session'
 
 /** Immutable site/account identity returned only by the trusted authority. */
 export const principalSchema = z.object({
@@ -33,7 +34,7 @@ export class EmployeeIdentity {
    * @param signal - local cancellation, which cannot undo accepted remote work.
    * @returns parsed result; callers validate the operation-specific fields.
    */
-  async request(operation: 'login' | 'authorize' | 'logout' | 'read', value: unknown, signal: AbortSignal): Promise<unknown> {
+  async request(operation: 'login' | 'authorize' | 'logout' | 'read' | 'application', value: unknown, signal: AbortSignal): Promise<unknown> {
     const payload = JSON.stringify({ version: 1, operation, value }) + '\n'
     if (Buffer.byteLength(payload) > 8192 || signal.aborted) throw new EmployeeAccessError(401)
     return new Promise((resolve, reject) => {
@@ -51,7 +52,7 @@ export class EmployeeIdentity {
       socket.once('end', () => { ended = true })
       socket.on('data', (chunk: Buffer) => {
         size += chunk.length
-        if (size > (operation === 'read' ? 262144 : 8192)) cancel()
+        if (size > (operation === 'read' || operation === 'application' ? 262144 : 8192)) cancel()
         else chunks.push(chunk)
       })
       socket.once('close', () => {
@@ -91,5 +92,20 @@ export class EmployeeIdentity {
    */
   async read(credential: string, operation: string, arguments_: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
     return this.request('read', { credential, operation, arguments: arguments_ }, signal)
+  }
+
+  /**
+   * Forward a session-owned application request; business rules belong to the authority.
+   * @param credential - private verified login, never model input.
+   * @param sessionId - session whose ownership the caller has verified.
+   * @param action - preview never executes; confirm is available only to the browser route.
+   * @param arguments_ - untrusted values validated again by the application.
+   * @param signal - request lifetime; disconnect cannot undo accepted confirmation.
+   * @returns bounded application data; confirmation outcomes must not be inferred from HTTP failure.
+   */
+  async application(credential: string, sessionId: SessionId,
+    action: 'capabilities' | 'preview' | 'review' | 'confirm',
+    arguments_: Record<string, unknown>, signal: AbortSignal): Promise<unknown> {
+    return this.request('application', { credential, sessionId, action, arguments: arguments_ }, signal)
   }
 }

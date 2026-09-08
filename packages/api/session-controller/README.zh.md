@@ -31,7 +31,9 @@ Client adapter 提供 `SessionEventStream`，即绑定到一个普通 Session �
 
 Session 对象还承载本地提交回显：`session.beginSubmission` 在调用方序列化与 prompt 之前，同步把一条回显写入 `SessionSnapshot.pendingSubmissions`，会话 UI 因此能在点击提交的当帧显示消息。Session 根据当前运行状态与请求的投递模式推导每条回显的 `transcript`、`queued` 或 `steering` 位置，并在序列化期间保留该位置。prompt 的 `requestId` 是关联标识：Host 把它回显为 durable user source 的 `rpcId`，queue occurrence 也把它投影为 `SessionQueuedItem.rpcId`。回显在观察到其 durable event 或 queue occurrence 后延迟一个动画帧退休，该延迟保证替代内容就绪前回显仍可渲染；带标识的 prompt 失败或被放弃时立即退休，销毁时按 failed 退休；每次退休恰好触发一次注册的 `onRetire` 回调。回显只存在于 Client 内存；刷新与重连只从 durable event 重建会话。
 
-可选的 `@deepseek-ai/dsh-api-session-controller/employee-access` 子路径挂载独立的账号所属会话 API。可选 `promptPreset` 启用请求绑定的只读轮次；未配置时阻止员工执行。Host 命令不能提供员工授权。[共享员工预览指南](../../../docs/user/guide/employee-shared.zh.md)定义配置、持久化和部署要求。员工可以创建会话、查看所属列表和分页历史，并请求限定范围的 Frappe 读取。认证提示仅在请求内存中保留凭据，在模型请求前及读取前后复查，并把工具结果记录到所属历史。搜索、附件、写入及全局流仍被拒绝。
+可选的 `@deepseek-ai/dsh-api-session-controller/employee-access` 子路径挂载独立的账号所属会话 API。可选 `promptPreset` 启用请求绑定的轮次；未配置时阻止员工执行。Host 命令不能提供员工授权。[共享员工预览指南](../../../docs/user/guide/employee-shared.zh.md)定义读取配置和持久化要求。员工可以创建会话、查看所属列表和分页历史，并请求限定范围的 Frappe 读取。凭据仅留在请求内存中，执行前后重新验证。搜索、附件、任意写入及全局流仍被拒绝。
+
+可选 `applicationPreviews: true` 启用通用私有 `application` IPC 操作，包含 `credential`、已验证的 `sessionId`、`action` 和 `arguments`。身份服务负责账号准入、业务校验、预览存储、过期处理、确认幂等和审计。只有身份服务返回 `{ previews: true }` 时，模型才获得预览工具。同源 POST 路由 `session/capabilities`、`session/review` 和 `session/confirm` 重新检查登录及会话归属；确认仅接受 `sessionId`、`preview_id` 和已展示的 `digest`。没有模型工具可以确认。浏览器展示身份服务提供的预览，不把模型文本当成审批；HTTP 结果不明确时必须查询回执，不能重试业务操作。参见[应用预览决策](../../../.agents/notes/implemented/architecture/2026-09-08-application-preview-confirmation.zh.md)。
 
 -----
 
@@ -54,11 +56,11 @@ Session 对象还承载本地提交回显：`session.beginSubmission` 在调用�
 
 #### 模型看到的内容
 
-指定的所属预设获得[员工读取 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-api-session-controller)。工具结果包含按权限过滤的 JSON 文本，不包含凭据和归属记录。其他工具及无 Agent 身份的调用被拒绝，提示为 `Employee Agent execution is unavailable.`
+指定的所属预设获得[员工工具 schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-api-session-controller)。获准的预览工具为独立人工确认准备变更，不自行报告已执行。结果包含应用过滤后的 JSON 文本，不包含凭据和归属记录。其他工具及无 Agent 身份的调用被拒绝，提示为 `Employee Agent execution is unavailable.`
 
 #### Token 影响
 
-工具 schema 在同一预设中保持稳定。查询结果追加到历史，受身份服务 262144 字节响应上限约束；提供商的 token 上限独立生效。
+预览 schema 仅为身份服务准入的账号添加。结果追加到历史，受身份服务 262144 字节响应上限约束；提供商的 token 上限独立生效。
 
 #### KV Cache 影响
 

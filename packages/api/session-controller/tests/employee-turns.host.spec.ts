@@ -9,7 +9,7 @@ import { EmployeeTurns } from '../src/employee-turns.ts'
 import { EmployeeAccessError, type EmployeeIdentity } from '../src/employee-identity.ts'
 import type { EmployeeOwners } from '../src/employee-owners.ts'
 
-function fixture() {
+function fixture(previews = false) {
   const principal = { site: 'example.test', user: 'teacher@example.test' }
   const id = 'session-11111111-1111-1111-1111-111111111111' as SessionId
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -31,7 +31,9 @@ function fixture() {
   const identity = { authorize: vi.fn(async () => {
     if (!enabled) throw new EmployeeAccessError(401)
     return principal
-  }), read: vi.fn(async () => ({ rows: ['own-record'] })) }
+  }), read: vi.fn(async () => ({ rows: ['own-record'] })),
+  application: vi.fn(async (_credential: string, _session: string, action: string) =>
+    action === 'capabilities' ? { previews } : { preview_id: 'synthetic-preview', state: 'awaiting_confirmation' }) }
   const owners = { blocksExecution: (candidate: SessionId) => candidate === id, assertOwner: vi.fn(async () => {}) }
   let requestId = ''
   const ctx = {
@@ -48,7 +50,7 @@ function fixture() {
     } },
   } as unknown as Context
   const turns = new EmployeeTurns(ctx, owners as unknown as EmployeeOwners,
-    identity as unknown as EmployeeIdentity, 'shared', 1000)
+    identity as unknown as EmployeeIdentity, 'shared', 1000, previews)
   handlers.get('agent/created')?.({ agent })
   async function step(turn: number, rpcId?: string) {
     const messages = rpcId === undefined ? [] : [{ source: { kind: 'user', rpcId } }]
@@ -64,6 +66,26 @@ function fixture() {
 }
 
 describe('request-owned employee turns', () => {
+  it('exposes only a preview tool, derives the session and never forwards confirmation input', async () => {
+    const f = fixture(true)
+    try {
+      const pending = f.turns.prompt(f.id, 'Prepare change', 'opaque', f.principal, new AbortController().signal)
+      await f.ready
+      expect(await f.step(1, f.requestId())).toMatchObject({ kind: 'enter' })
+      const definition = f.definitions.find(tool => tool.name === 'employee_application_preview')
+      if (definition === undefined) throw new Error('preview tool not registered')
+      expect(f.definitions.map(tool => tool.name)).not.toContain('employee_application_confirm')
+      const execution = { agent: f.agent, signal: new AbortController().signal } as ToolRunContext
+      const input = { operation: 'update', arguments: { doctype: 'Synthetic', name: 'one', changes: { label: 'new' } } }
+      await expect(definition.execute(input, execution)).resolves.toContain('awaiting_confirmation')
+      expect(f.identity.application).toHaveBeenLastCalledWith('opaque', f.id, 'preview', input, expect.any(AbortSignal))
+      await expect(definition.execute({ ...input, confirm: true }, execution)).rejects.toMatchObject({ status: 400 })
+      f.finish()
+      await pending
+      await expect(definition.execute(input, execution)).rejects.toMatchObject({ status: 401 })
+    } finally { await f.dispose() }
+    expect(f.definitions).toEqual([])
+  })
   it('requires the admitted message and exact turn, and removes the scoped tool on disposal', async () => {
     const f = fixture()
     try {

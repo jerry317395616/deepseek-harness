@@ -9,11 +9,12 @@ import { normalizeSessionSnapshots, normalizedSystemPrompts, normalizedToolSchem
 import { disposeEmployeeFixtures, logs, startEmployee } from '../../cli/tests/profiles/employee-readonly/harness.ts'
 import { sharedLogin, startSharedAuthority } from '../../cli/tests/profiles/employee-readonly/shared.ts'
 
-const directory = fileURLToPath(new URL('../../../snapshots/web/employee-shared-readonly', import.meta.url))
 const disposers: (() => Promise<unknown>)[] = []
 afterEach(() => disposeEmployeeFixtures(disposers))
 
-it.skipIf(process.platform !== 'linux')('replays an authenticated permission-scoped employee read', async () => {
+it.skipIf(process.platform !== 'linux').each([false, true])('replays authenticated application access (previews=%s)', async (applicationPreviews) => {
+  const directory = fileURLToPath(new URL(applicationPreviews
+    ? '../../../snapshots/web/employee-shared-preview' : '../../../snapshots/web/employee-shared-readonly', import.meta.url))
   const mode = process.env.DSH_SNAPSHOT || 'replay'
   if (mode !== 'replay' && mode !== 'refresh') throw new Error('shared fixture supports keyless replay and refresh only')
   const file = join(directory, 'session.jsonl')
@@ -22,13 +23,20 @@ it.skipIf(process.platform !== 'linux')('replays an authenticated permission-sco
   const content = user.data.content[0]
   if (content?.type !== 'text') throw new Error('shared fixture requires text')
   const authority = await startSharedAuthority(disposers)
-  const host = await startEmployee(disposers, 'shared', 'http://127.0.0.1:1', undefined, file, true, authority)
+  const host = await startEmployee(disposers, 'shared', 'http://127.0.0.1:1', undefined, file, true, { ...authority, applicationPreviews })
   const employee = await sharedLogin(host.origin, authority.ticket('teacher@example.test'))
   const created = await (await employee.raw('/employee/session/create')).json() as { sessionId: string }
   const result = await employee.raw('/employee/session/prompt', { sessionId: created.sessionId, text: content.text })
   expect(result.status, host.safeLog()).toBe(200)
   const raw = await logs(host.home)
-  expect(raw).toContain('synthetic-teacher')
+  expect(raw).toContain(applicationPreviews ? 'synthetic-preview' : 'synthetic-teacher')
+  if (applicationPreviews) {
+    const review: unknown = await (await employee.raw('/employee/session/review', { sessionId: created.sessionId })).json()
+    expect(review).toMatchObject({ items: [{ state: 'awaiting_confirmation' }] })
+    const confirm = { sessionId: created.sessionId, preview_id: 'synthetic-preview', digest: 'a'.repeat(64) }
+    expect(await (await employee.raw('/employee/session/confirm', confirm)).json()).toEqual({ state: 'succeeded', replayed: false })
+    expect(await (await employee.raw('/employee/session/confirm', confirm)).json()).toEqual({ state: 'succeeded', replayed: true })
+  }
   expect(raw).not.toContain('synthetic-finance')
   expect(raw).not.toContain(employee.cookie.split('=')[1])
   expect(raw).not.toContain('teacher@example.test')

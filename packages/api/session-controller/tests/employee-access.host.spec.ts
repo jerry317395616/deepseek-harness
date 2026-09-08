@@ -78,6 +78,21 @@ describe.skipIf(process.platform !== 'linux')('shared session access', () => {
     }
   })
 
+  it('resolves an omitted history boundary only after checking ownership', async () => {
+    const f = await fixture()
+    const created = await f.access.execute('create', {}, 'a', signal) as { sessionId: SessionId }
+    const cursor = vi.fn(async () => 42)
+    const access = new EmployeeSessionAccess(f.controller, f.owners, f.identity, f.materialize,
+      undefined, undefined, cursor)
+    await expect(access.execute('page', created, 'b', signal)).rejects.toMatchObject({ status: 404 })
+    expect(cursor).not.toHaveBeenCalled()
+    await access.execute('page', created, 'a', signal)
+    expect(cursor).toHaveBeenCalledWith(created.sessionId, signal)
+    expect(f.controller.page).toHaveBeenCalledWith({ address: { kind: 'session', sessionId: created.sessionId }, throughSeq: 42 }, signal)
+    await access.execute('page', { ...created, throughSeq: 20 }, 'a', signal)
+    expect(cursor).toHaveBeenCalledTimes(1)
+  })
+
   it('uses site and account together and restores immutable owners from disk', async () => {
     const f = await fixture()
     const created = await f.access.execute('create', {}, 'a', signal) as { sessionId: SessionId }

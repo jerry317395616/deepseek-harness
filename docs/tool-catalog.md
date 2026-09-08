@@ -15,7 +15,7 @@ This table connects model-visible tool names to the plugin package and service s
 
 | Tool package | Model-visible names | Requires | Writes / affects | Shipped aliases | Deployment note |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-api-session-controller` | `employee_frappe_read` | `ctx.tools`, `request-owned employee identity authority` | `tool/call`, `tool/result` | - | The employee-access subpath registers this tool only for the configured account-owned preset. The executor requires a live authenticated turn and revalidates its account around every read. Registration grants no account authority. |
+| `@deepseek-ai/dsh-api-session-controller` | `employee_application_preview`, `employee_frappe_read` | `ctx.tools`, `request-owned employee identity authority` | `tool/call`, `tool/result` | - | The employee-access subpath registers reads for the configured account-owned preset and previews only for authority-admitted accounts. Executors require a live authenticated turn. Preview never confirms or executes a change; confirmation uses a separate owned browser route. Registration grants no account authority. |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`, `ctx.userQuestions` | `tool/call`, `tool/result after a UI/provider answers the question` | - | ask_user_question pauses the tool call until the active UI provider returns a human answer. |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`, `ctx.codeRuntime (execution time)`, `ctx.systemPrompt` | `tool/call`, `one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`, `tool/result` | - | Owned by the tool registry as a reserved transport outside filterable capability layers under `mode: ptc` / `mode: both` (see the PTC mode Agent Note). Under `ptc` it is the registry's only wire contribution; the other visible capabilities are declared in a generated SDK section in the loaded runtime's language, and a program calls them through bindings scheduled under the native concurrency contract (submission-ordered starts and policy; concurrency-safe bodies overlap up to `maxParallelSubCalls`) that re-enter the complete guarded tool pipeline and link each nested execution to this outer result. |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`, `ctx.systemPrompt`, `ctx.userQuestions (execution time, opportunistic)` | `tool/call`, `plan/mode inactive on an approved review`, `tool/result` | - | exit_plan_mode stays in the model-facing schema while planning is inactive so transitions add no tool-catalog churn on top of the plan-policy change. Its execute path rejects calls outside plan mode; in plan mode it presents the plan over the user-questions seam (approve / keep planning with feedback), and approval logs plan mode inactive at the step boundary. |
@@ -51,6 +51,33 @@ This table connects model-visible tool names to the plugin package and service s
 
 ## `@deepseek-ai/dsh-api-session-controller`
 
+### `employee_application_preview`
+
+Prepare a requested business change for human review using the current login. Read the application metadata first for supported operations and arguments. This does not execute the change. Never claim success before the user separately confirms the preview.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "string",
+      "description": "Application-supported preview operation from its metadata."
+    },
+    "arguments": {
+      "type": "object",
+      "description": "Structured application argument object. Never include an account, site, session, confirmation, SQL or executable code.",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "operation",
+    "arguments"
+  ]
+}
+```
+
+Source: [`packages/api/session-controller/src/employee-turns.ts`](../packages/api/session-controller/src/employee-turns.ts)
+
 ### `employee_frappe_read`
 
 Read permitted Frappe metadata, lists or one record using your current login. Never supply an account, site, SQL or executable code.
@@ -64,7 +91,9 @@ Read permitted Frappe metadata, lists or one record using your current login. Ne
       "description": "frappe_describe_doctype, frappe_list_documents or frappe_get_document."
     },
     "arguments": {
-      "description": "Structured query: doctype; optional fields, filters, order_by, limit, start; name for one record."
+      "type": "object",
+      "description": "Structured query object: doctype; optional fields, filters, order_by, limit, start; name for one record.",
+      "additionalProperties": true
     }
   },
   "required": [
@@ -76,7 +105,7 @@ Read permitted Frappe metadata, lists or one record using your current login. Ne
 
 Source: [`packages/api/session-controller/src/employee-turns.ts`](../packages/api/session-controller/src/employee-turns.ts)
 
-The employee-access subpath registers this tool only for the configured account-owned preset. The executor requires a live authenticated turn and revalidates its account around every read. Registration grants no account authority.
+The employee-access subpath registers reads for the configured account-owned preset and previews only for authority-admitted accounts. Executors require a live authenticated turn. Preview never confirms or executes a change; confirmation uses a separate owned browser route. Registration grants no account authority.
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

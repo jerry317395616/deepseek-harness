@@ -26,7 +26,7 @@ interface RpcReply {
 export async function startEmployee(
   disposers: (() => Promise<unknown>)[], label: string, baseURL: string, existingRoot?: string,
   replayFixture?: string, brokerMode = false,
-  sharedAccess?: { socketPath: string; publicOrigin: string },
+  sharedAccess?: { socketPath: string; publicOrigin: string; applicationPreviews?: boolean },
   businessPolicy = false,
 ) {
   const root = existingRoot ?? await mkdtemp(join(tmpdir(), 'dsh-employee-profile-'))
@@ -58,6 +58,11 @@ export async function startEmployee(
   }
   const fixturePatch = join(root, 'model.patch.yml')
   await writeFile(fixturePatch, JSON.stringify([
+    ...(sharedAccess?.applicationPreviews === true ? [{ id: 'employee-session-access', config: {
+      applicationPreviews: true, publicOrigin: sharedAccess.publicOrigin, identitySocketPath: sharedAccess.socketPath,
+      ownersDirectory: join(home, 'employee-owners'), timeoutMs: 30000, maxRequests: 16,
+      maxOwnershipEntries: 10000, maxResponseBytes: 1000000, promptPreset: 'employee-shared-readonly',
+    } }] : []),
     { id: 'llm-deepseek', disabled: replayFixture !== undefined, config: { baseURL, apiKeyEnv: 'EMPLOYEE_FIXTURE_MODEL_KEY' } },
     ...(replayFixture === undefined ? [] : [{ insert: [{
       id: 'llm-replay', name: '@deepseek-ai/dsh-llm-replay', config: {

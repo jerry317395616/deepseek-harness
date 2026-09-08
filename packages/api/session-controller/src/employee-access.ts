@@ -19,7 +19,7 @@ import { EmployeeTurns } from './employee-turns.ts'
 /** Stable plugin name for the opt-in shared session API. */
 export const name = 'employee-session-access'
 /** Core services required by the shared session API. */
-export const inject = ['webServer', 'sessionController', 'sessions', 'sessionPersistence', 'tools', 'agents', 'sessionProjections']
+export const inject = ['webServer', 'sessionController', 'sessions', 'sessionPersistence', 'sessionQuery', 'tools', 'agents', 'sessionProjections']
 
 /** Explicit deployment settings; this API has no production-default profile. */
 export interface Config {
@@ -39,6 +39,8 @@ export interface Config {
   maxResponseBytes: number
   /** Explicit read-only Agent preset; omission keeps Agent execution disabled. */
   promptPreset?: string
+  /** Enable application-owned previews and separate same-origin browser confirmation. */
+  applicationPreviews?: boolean
 }
 
 export const Config: schema<Config> = schema.object({
@@ -50,13 +52,14 @@ export const Config: schema<Config> = schema.object({
   maxOwnershipEntries: schema.number().step(1).min(1).max(100000),
   maxResponseBytes: schema.number().step(1).min(1024).max(5000000),
   promptPreset: schema.string(),
+  applicationPreviews: schema.boolean(),
 })
 
 const COOKIE = '__Host-dsh-shared'
 const emptySchema = z.object({}).strict()
 const pageSchema = z.object({
   sessionId: z.string().regex(/^session-[0-9a-f-]{36}$/u),
-  throughSeq: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER),
+  throughSeq: z.number().int().min(-1).max(Number.MAX_SAFE_INTEGER).optional(),
   beforeSeq: z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
   maxMessages: z.number().int().min(1).max(100).optional(),
 }).strict()
@@ -66,6 +69,10 @@ const readSchema = z.object({
   arguments: z.record(z.string(), z.unknown()),
 }).strict()
 const promptSchema = z.object({ sessionId: pageSchema.shape.sessionId, text: z.string().min(1).max(6000) }).strict()
+const reviewSchema = z.object({ sessionId: pageSchema.shape.sessionId }).strict()
+const confirmationSchema = reviewSchema.extend({
+  preview_id: z.string().min(1).max(140), digest: z.string().regex(/^[a-f0-9]{64}$/u),
+}).strict()
 
 /** Execute account-owned operations; authorization is repeated before releasing results. */
 export class EmployeeSessionAccess {
@@ -75,6 +82,8 @@ export class EmployeeSessionAccess {
    * @param identity - current-account authority.
    * @param materialize - commit the exact created session before acknowledging it.
    * @param execution - optional deployment-owned authenticated turn executor.
+   * @param application - optional private application preview and confirmation transport.
+   * @param currentCursor - obtain a current history boundary after the ownership check.
    */
   constructor(
     private readonly controller: Pick<SessionController, 'create' | 'list' | 'page'>,
@@ -82,6 +91,8 @@ export class EmployeeSessionAccess {
     private readonly identity: Pick<EmployeeIdentity, 'authorize' | 'read'>,
     private readonly materialize: (sessionId: SessionId) => Promise<void>,
     private readonly execution?: { preset: string; turns: EmployeeTurns },
+    private readonly application?: Pick<EmployeeIdentity, 'application'>,
+    private readonly currentCursor?: (sessionId: SessionId, signal: AbortSignal) => Promise<number>,
   ) {}
 
   private async recheck(credential: string, principal: EmployeePrincipal, signal: AbortSignal): Promise<void> {
@@ -128,14 +139,24 @@ export class EmployeeSessionAccess {
       await this.owners.assertOwner(sessionId, principal)
       await this.recheck(credential, principal, signal)
       result = await this.identity.read(credential, parsed.data.operation, parsed.data.arguments, signal)
+    } else if ((operation === 'review' || operation === 'confirm' || operation === 'capabilities') && this.application !== undefined) {
+      const parsed = (operation === 'confirm' ? confirmationSchema : reviewSchema).safeParse(input)
+      if (!parsed.success) throw new EmployeeAccessError(400)
+      const { sessionId: rawId, ...arguments_ } = parsed.data
+      const sessionId = brandString<SessionId>(rawId)
+      await this.owners.assertOwner(sessionId, principal)
+      await this.recheck(credential, principal, signal)
+      result = await this.application.application(credential, sessionId, operation, arguments_, signal)
     } else if (operation === 'page') {
       const parsed = pageSchema.safeParse(input)
       if (!parsed.success) throw new EmployeeAccessError(400)
       const { sessionId: rawId, ...page } = parsed.data
       const sessionId = brandString<SessionId>(rawId)
       await this.owners.assertOwner(sessionId, principal)
+      const throughSeq = page.throughSeq ?? await this.currentCursor?.(sessionId, signal)
+      if (throughSeq === undefined) throw new EmployeeAccessError(503)
       result = await this.controller.page({
-        address: { kind: 'session', sessionId }, throughSeq: page.throughSeq,
+        address: { kind: 'session', sessionId }, throughSeq,
         ...(page.beforeSeq === undefined ? {} : { beforeSeq: page.beforeSeq }),
         ...(page.maxMessages === undefined ? {} : { maxMessages: page.maxMessages }),
       }, signal)
@@ -195,7 +216,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const identity = new EmployeeIdentity(config.identitySocketPath, config.timeoutMs)
   const execution = config.promptPreset === undefined ? undefined : {
     preset: config.promptPreset,
-    turns: new EmployeeTurns(ctx, owners, identity, config.promptPreset, config.timeoutMs),
+    turns: new EmployeeTurns(ctx, owners, identity, config.promptPreset, config.timeoutMs, config.applicationPreviews),
   }
   if (execution === undefined) {
   // Host credentials do not bind a Frappe actor to queued employee work.
@@ -213,7 +234,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const session = ctx.sessions.get(sessionId)
     if (session === undefined) throw new EmployeeAccessError(503)
     await ctx.sessionPersistence.ensureMaterialized(session)
-  }, execution)
+  }, execution, config.applicationPreviews === true ? identity : undefined, async (sessionId, signal) => {
+    using observation = await ctx.sessionQuery.observeSession(sessionId, { signal, projectionMode: 'none' })
+    return observation.cursor
+  })
   const requests = new Map<Promise<void>, AbortController>()
   let closing = false
 
@@ -255,7 +279,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         send(res, 204, undefined, { 'set-cookie': `${COOKIE}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Strict` })
         return
       }
-      const operation = /^\/employee\/session\/(create|list|page|read|prompt)$/u.exec(url.pathname)?.[1]
+      const operation = /^\/employee\/session\/(create|list|page|read|prompt|capabilities|review|confirm)$/u.exec(url.pathname)?.[1]
       if (operation === undefined) throw new EmployeeAccessError(404)
       const result = await access.execute(operation, await body(req, abort.signal), login, abort.signal)
       const serialized = JSON.stringify(result)

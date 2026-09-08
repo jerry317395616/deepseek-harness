@@ -26,7 +26,34 @@ async def main():
             return {"doctype": "Student", "name": arguments["name"],
                     "document": document if arguments["name"] == own_name else None}
         return {"doctype": "Student", "rows": [document]}
-    authority = SharedIdentity(config, enabled, read=read)
+    class ApplicationFixture(SharedIdentity):
+        """Synthetic application receipts; no business rules or Frappe writes."""
+        def __init__(self):
+            super().__init__(config, enabled, read=read)
+            self.previews = {}
+
+        async def execute(self, request):
+            if request.get("operation") != "application":
+                return await super().execute(request)
+            value = request["value"]
+            principal = await self.resolve(value["credential"])
+            if principal is None:
+                raise PermissionError("not admitted")
+            key = (value["credential"], value["sessionId"])
+            if value["action"] == "capabilities":
+                return {"previews": True}
+            if value["action"] == "preview":
+                self.previews[key] = {"preview_id": "synthetic-preview", "digest": "a" * 64,
+                    "state": "awaiting_confirmation"}
+                return self.previews[key]
+            if value["action"] == "review":
+                return {"items": [self.previews[key]] if key in self.previews else []}
+            if value["action"] == "confirm" and key in self.previews:
+                replayed = self.previews[key]["state"] == "succeeded"
+                self.previews[key]["state"] = "succeeded"
+                return {"state": "succeeded", "replayed": replayed}
+            raise ValueError("unsupported application action")
+    authority = ApplicationFixture()
     stopped = asyncio.Event()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

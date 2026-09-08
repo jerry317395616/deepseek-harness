@@ -11,6 +11,9 @@ import { EmployeeAccessError, type EmployeeIdentity, type EmployeePrincipal } fr
 import { type EmployeeOwners, sameEmployee } from './employee-owners.ts'
 
 const TOOL = 'employee_frappe_read'
+const PREVIEW_TOOL = 'employee_application_preview'
+const previewQuery = z.object({ operation: z.string().min(1).max(64),
+  arguments: z.record(z.string(), z.unknown()) }).strict()
 const query = z.object({
   operation: z.enum(['frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
   arguments: z.record(z.string(), z.unknown()),
@@ -29,11 +32,30 @@ export function employeeReadTool(read: (input: unknown, execution: ToolExecution
     description: 'Read permitted Frappe metadata, lists or one record using your current login. Never supply an account, site, SQL or executable code.',
     parameters: {
       operation: { type: 'string', required: true, description: 'frappe_describe_doctype, frappe_list_documents or frappe_get_document.' },
-      arguments: { type: 'json', required: true, description: 'Structured query: doctype; optional fields, filters, order_by, limit, start; name for one record.' },
+      arguments: { type: 'object', additionalProperties: true, required: true, description: 'Structured query object: doctype; optional fields, filters, order_by, limit, start; name for one record.' },
     },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     timeoutMs,
     execute: read,
+  })
+}
+
+/**
+ * Build an application-owned change preview tool. It never accepts confirmation.
+ * @param preview - actor-bound preview executor, not a write executor.
+ * @param timeoutMs - complete tool deadline.
+ * @returns a tool whose result still requires independent human review and confirmation.
+ */
+export function employeePreviewTool(preview: (input: unknown, execution: ToolExecution) => Promise<string>,
+  timeoutMs: number): ToolDefinition {
+  return defineTool({ name: PREVIEW_TOOL,
+    description: 'Prepare a requested business change for human review using the current login. Read the application metadata first for supported operations and arguments. This does not execute the change. Never claim success before the user separately confirms the preview.',
+    parameters: {
+      operation: { type: 'string', required: true, description: 'Application-supported preview operation from its metadata.' },
+      arguments: { type: 'object', additionalProperties: true, required: true, description: 'Structured application argument object. Never include an account, site, session, confirmation, SQL or executable code.' },
+    },
+    output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
+    timeoutMs, execute: preview,
   })
 }
 
@@ -47,11 +69,13 @@ interface Run {
   entered: boolean
   closed: boolean
   failed: boolean
+  previews: boolean
 }
 
 /** Owns one non-resumable authenticated activity per session, through whole-agent quiescence. */
 export class EmployeeTurns {
   private readonly runs = new Map<SessionId, Run>()
+  private readonly previewAgents = new WeakSet<Agent>()
 
   /**
    * @param ctx - trusted Host services; employees cannot access their control API.
@@ -59,9 +83,11 @@ export class EmployeeTurns {
    * @param identity - login authority and permission-aware read executor.
    * @param preset - deployment-owned read-only preset, never supplied by the caller.
    * @param timeoutMs - bounded read-tool deadline.
+   * @param applicationPreviews - explicit transport opt-in; authority still decides each account's capability.
    */
   constructor(private readonly ctx: Context, private readonly owners: EmployeeOwners,
-    private readonly identity: EmployeeIdentity, preset: string, timeoutMs: number) {
+    private readonly identity: EmployeeIdentity, preset: string, private readonly timeoutMs: number,
+    private readonly applicationPreviews = false) {
     ctx.on('agent/created', ({ agent }) => {
       if (!owners.blocksExecution(agent.session.id)) return
       if (ctx.sessionProjections.stateOf(agent.session, 'agentPreset') !== preset) return
@@ -77,6 +103,7 @@ export class EmployeeTurns {
         await this.check(run, signal)
         return JSON.stringify(result)
       }, timeoutMs)))
+      if (this.runs.get(agent.session.id)?.previews === true) this.registerPreview(agent)
     })
     ctx.on('agent/pre-step', async ({ agent, messages, turn, signal }, next) => {
       if (!owners.blocksExecution(agent.session.id)) return next()
@@ -127,7 +154,8 @@ export class EmployeeTurns {
       if (agent === undefined) return 'Employee Agent execution is unavailable.'
       if (!owners.blocksExecution(agent.session.id)) return undefined
       const run = this.runs.get(agent.session.id)
-      return execution.name === TOOL && run?.agent === agent && run.entered && !run.closed
+      return (execution.name === TOOL || (execution.name === PREVIEW_TOOL && run?.previews === true))
+        && run?.agent === agent && run.entered && !run.closed
         && !run.failed && !run.signal.aborted ? undefined : 'Employee Agent execution is unavailable.'
     }))
   }
@@ -137,6 +165,22 @@ export class EmployeeTurns {
     if (run === undefined || run.agent !== agent || !run.entered || run.closed || run.failed || run.signal.aborted)
       throw new EmployeeAccessError(401)
     return run
+  }
+
+  private registerPreview(agent: Agent): void {
+    if (this.previewAgents.has(agent)) return
+    this.ctx.effect(() => agent.ctx.tools.register(employeePreviewTool(async (input, execution) => {
+      const run = this.requireRun(agent)
+      if (!run.previews || execution.agent !== agent) throw new EmployeeAccessError(401)
+      const parsed = previewQuery.safeParse(input)
+      if (!parsed.success) throw new EmployeeAccessError(400)
+      const signal = AbortSignal.any([run.signal, execution.signal])
+      await this.check(run, signal)
+      const result = await this.identity.application(run.credential, agent.session.id, 'preview', parsed.data, signal)
+      await this.check(run, signal)
+      return JSON.stringify(result)
+    }, this.timeoutMs)))
+    this.previewAgents.add(agent)
   }
 
   /**
@@ -176,13 +220,20 @@ export class EmployeeTurns {
     principal: EmployeePrincipal, signal: AbortSignal): Promise<{ settled: true; throughSeq: number }> {
     if (this.runs.has(sessionId)) throw new EmployeeAccessError(503)
     const run: Run = { credential, principal, signal, requestId: brandString<SessionRequestId>(randomUUID()),
-      entered: false, closed: false, failed: false }
+      entered: false, closed: false, failed: false, previews: false }
     this.runs.set(sessionId, run)
     const cancel = (): void => { this.ctx.agents.get(sessionId)?.cancel({ kind: 'hook', reason: 'Employee request ended.' }) }
     signal.addEventListener('abort', cancel, { once: true })
     try {
       await this.check(run, signal)
       await this.owners.assertOwner(sessionId, principal)
+      if (this.applicationPreviews) {
+        const capability = z.object({ previews: z.boolean() }).strict().parse(
+          await this.identity.application(credential, sessionId, 'capabilities', {}, signal))
+        run.previews = capability.previews
+        const existing = this.ctx.agents.get(sessionId)
+        if (run.previews && existing !== undefined) this.registerPreview(existing)
+      }
       await this.ctx.sessionController.prompt({ sessionId, requestId: run.requestId,
         mode: 'queue', content: [{ type: 'text', text }] }, signal)
       if (signal.aborted) cancel()

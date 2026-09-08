@@ -19,7 +19,7 @@
 
 | 工具包 | 模型可见名称 | 依赖 | 写入／影响 | 随产品发布的别名 | 部署说明 |
 | --- | --- | --- | --- | --- | --- |
-| `@deepseek-ai/dsh-api-session-controller` | `employee_frappe_read` | `ctx.tools`、`request-owned employee identity authority` | `tool/call`、`tool/result` | - | employee-access 子路径仅为指定的账号所属预设注册此工具。执行器要求活动的认证轮次，并在每次读取前后复查账号。注册本身不授予账号权限。 |
+| `@deepseek-ai/dsh-api-session-controller` | `employee_application_preview`、`employee_frappe_read` | `ctx.tools`、`request-owned employee identity authority` | `tool/call`、`tool/result` | - | employee-access 子路径为指定的账号所属预设注册读取工具，仅为身份服务准入的账号注册预览。执行器要求活动的认证轮次。预览不确认或执行变更；确认使用独立的所属浏览器路由。注册本身不授予账号权限。 |
 | `@deepseek-ai/dsh-tool-ask-user` | `ask_user_question` | `ctx.tools`、`ctx.userQuestions` | `tool/call`、`tool/result after a UI/provider answers the question` | - | ask_user_question 会暂停工具调用，直到当前 UI 提供方返回人类答案。 |
 | `@deepseek-ai/dsh-tools` | `run_code` | `ctx.tools`、`ctx.codeRuntime (execution time)`、`ctx.systemPrompt` | `tool/call`、`one tool/code-dispatch-start + tool/code-dispatch pair per bridged sub-call`、`tool/result` | - | 在 `mode: ptc`／`mode: both` 下，它由工具注册表所有，作为可过滤能力层之外的保留传输机制（参见 PTC mode Agent Note）。在 `ptc` 下，它是注册表对协议格式（wire format）的唯一贡献；其他可见能力在使用已加载运行时语言生成的 SDK 章节中声明。程序通过 binding 调用这些能力，调用按照原生并发约定调度：启动顺序和策略遵循提交顺序，并发安全的函数体最多重叠执行 `maxParallelSubCalls` 个。调用会重新进入完整且受守卫保护的工具流水线，并将每个嵌套执行关联到此外层结果。 |
 | `@deepseek-ai/dsh-plan-mode` | `exit_plan_mode` | `ctx.tools`、`ctx.systemPrompt`、`ctx.userQuestions (execution time, opportunistic)` | `tool/call`、`plan/mode inactive on an approved review`、`tool/result` | - | 规划未激活时，exit_plan_mode 仍保留在面向模型的 schema 中，这样状态转换不会在规划策略变更之外额外造成工具目录变动。其执行路径会拒绝规划模式之外的调用；在规划模式下，它通过用户交互 seam 提交计划（批准／根据反馈继续规划），批准后会在步骤边界记录规划模式已停用。 |
@@ -55,6 +55,33 @@
 
 ## `@deepseek-ai/dsh-api-session-controller`
 
+### `employee_application_preview`
+
+使用当前登录为用户要求的业务变更准备人工审核预览。先读取应用元数据，了解支持的操作和参数。此操作不执行变更。用户独立确认预览之前，不能声称执行成功。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "operation": {
+      "type": "string",
+      "description": "Application-supported preview operation from its metadata."
+    },
+    "arguments": {
+      "type": "object",
+      "description": "Structured application argument object. Never include an account, site, session, confirmation, SQL or executable code.",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "operation",
+    "arguments"
+  ]
+}
+```
+
+源码：[`packages/api/session-controller/src/employee-turns.ts`](../packages/api/session-controller/src/employee-turns.ts)
+
 ### `employee_frappe_read`
 
 使用当前登录读取获准的 Frappe 元数据、列表或单条记录。不得提供账号、站点、SQL 或可执行代码。
@@ -68,7 +95,9 @@
       "description": "frappe_describe_doctype, frappe_list_documents or frappe_get_document."
     },
     "arguments": {
-      "description": "Structured query: doctype; optional fields, filters, order_by, limit, start; name for one record."
+      "type": "object",
+      "description": "Structured query object: doctype; optional fields, filters, order_by, limit, start; name for one record.",
+      "additionalProperties": true
     }
   },
   "required": [
@@ -80,7 +109,7 @@
 
 源码：[`packages/api/session-controller/src/employee-turns.ts`](../packages/api/session-controller/src/employee-turns.ts)
 
-employee-access 子路径仅为指定的账号所属预设注册此工具。执行器要求活动的认证轮次，并在每次读取前后复查账号。注册本身不授予账号权限。
+employee-access 子路径为指定的账号所属预设注册读取工具，仅为身份服务准入的账号注册预览。执行器要求活动的认证轮次。预览不确认或执行变更；确认使用独立的所属浏览器路由。注册本身不授予账号权限。
 
 <a id="deepseek-aidsh-tool-ask-user"></a>
 

@@ -35,11 +35,12 @@ async function fixture(overrides: Partial<Config> = {}) {
     let input = ''
     socket.on('data', (chunk) => { input += String(chunk) })
     socket.once('end', () => {
-      const value = JSON.parse(input) as { operation: string }
+      const value = JSON.parse(input) as { operation: string; value?: { action?: string } }
       if (reply !== undefined) { socket.end(reply); return }
       let result: object = { site: 'example.test', user: 'teacher@example.test' }
       if (value.operation === 'login') result = { cookie: 'A'.repeat(43), maxAge: 600 }
       if (value.operation === 'logout') { admitted = false; result = {} }
+      if (value.operation === 'application') result = { action: value.value?.action }
       socket.end(JSON.stringify({ ok: value.operation === 'logout' || admitted, result }) + '\n')
     })
   })
@@ -137,6 +138,21 @@ async function fixture(overrides: Partial<Config> = {}) {
 }
 
 describe.skipIf(process.platform !== 'linux')('shared HTTP preview', () => {
+  it('admits only explicit same-origin confirmation for an owned session, never a public preview action', async () => {
+    const f = await fixture({ applicationPreviews: true })
+    const created = await f.call('/employee/session/create', '{}')
+    const { sessionId } = JSON.parse(created.text) as { sessionId: string }
+    const body = JSON.stringify({ sessionId, preview_id: 'synthetic', digest: 'a'.repeat(64) })
+    expect((await f.call('/employee/session/confirm', body, { origin: 'https://attacker.test' })).status).toBe(400)
+    expect((await f.call('/employee/session/confirm', body, { cookie: undefined })).status).toBe(401)
+    expect((await f.call('/employee/session/confirm', body.replace(sessionId, 'session-11111111-1111-1111-1111-111111111111'))).status).toBe(404)
+    expect((await f.call('/employee/session/confirm', JSON.stringify({ sessionId, preview_id: 'synthetic', digest: 'a'.repeat(64), user: 'Administrator' }))).status).toBe(400)
+    expect((await f.call('/employee/session/confirm', body)).text).toContain('confirm')
+    expect((await f.call('/employee/session/review', JSON.stringify({ sessionId }))).text).toContain('review')
+    expect((await f.call('/employee/session/preview', body)).status).toBe(404)
+    const closed = await fixture()
+    expect((await closed.call('/employee/session/confirm', body)).status).toBe(404)
+  })
   it.each([undefined, 'employee-shared-readonly'])('denies unbound tool execution and disposes the guard (preset %s)', async (promptPreset) => {
     const f = await fixture(promptPreset === undefined ? {} : { promptPreset })
     const created = await f.call('/employee/session/create', '{}')
