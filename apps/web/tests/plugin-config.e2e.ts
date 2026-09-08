@@ -27,7 +27,7 @@ describe('web e2e: plugin configuration section', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
+    scaffold = await launchWebScaffold({ searxngSearch: true })
     browser = await chromium.launch()
     // Chinese browser: the section asserts the localized copy the client
     // derives from it, as the rest of the settings surface does.
@@ -75,11 +75,10 @@ describe('web e2e: plugin configuration section', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-cards'))
     const dialog = await openPlugins()
 
-    // Cards require both a Host namespace and a Client registration. The base
-    // composition serves DeepSeek search, not the Client card's SearXNG namespace.
+    // The deployment uses SearXNG; the Host namespace and Client card must both load.
     await dialog.getByText('终端', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByText('Agent 循环', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('网页搜索', { exact: true }).count()).toBe(0)
+    expect(await dialog.getByText('网页搜索', { exact: true }).count()).toBe(1)
     // Collapsed: a card's fields appear only once it is expanded.
     expect(await dialog.getByLabel('命令超时（毫秒）').count()).toBe(0)
 

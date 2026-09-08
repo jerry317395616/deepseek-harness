@@ -32,3 +32,7 @@
         - 'button "展开设置: Agent 循环"':
           - text: Agent 循环 Agent 如何派发工具调用。
           - img
+      - listitem:
+        - 'button "展开设置: 网页搜索"':
+          - text: 网页搜索 通过本部署的 SearXNG 服务搜索网页。
+          - img

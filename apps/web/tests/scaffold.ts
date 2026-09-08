@@ -301,6 +301,8 @@ export interface LaunchOptions {
    * keyless first-run configuration lane; the default disables the adapter.
    */
   deepSeekMissingCredential?: boolean
+  /** Use the deployment SearXNG search provider and its settings namespace. */
+  searxngSearch?: boolean
   /** Leave the current welcome notice pending; ordinary scenarios pre-acknowledge it before browser boot. */
   welcomeNoticePending?: boolean
   /**
@@ -546,6 +548,16 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
       ? [{ insert: [
         { id: 'tool-cordis', name: '@deepseek-ai/dsh-tool-cordis' },
       ] }]
+      : [],
+    ...options.searxngSearch === true
+      ? [
+        { id: 'web', config: { searchProvider: 'searxng', fetchProvider: 'http' } },
+        { id: 'web-search-deepseek', disabled: true },
+        { insert: [{
+          id: 'web-search-searxng',
+          name: '@deepseek-ai/dsh-web-search-searxng',
+        }] },
+      ]
       : [],
     ...options.deepSeekSearch === undefined
       ? []
