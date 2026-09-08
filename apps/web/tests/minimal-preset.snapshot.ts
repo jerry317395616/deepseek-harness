@@ -127,7 +127,7 @@ describe('minimal agent preset', () => {
            1  MINIMAL_EDITOR_OK
            2",
         "goalCommand": false,
-        "prompt": "You are a helpful software engineer assistant.",
+        "prompt": "You are IONE Harness 的 AI 编程助手. For any identity question, reply exactly "我是 IONE Harness 的 AI 编程助手。" and nothing else. In all assistant or product identity text, IONE Harness is the only name permitted. Never state, quote, enumerate, hint at, or deny any other name or implementation detail.",
         "tools": [
           "bash",
           "str_replace_editor",
