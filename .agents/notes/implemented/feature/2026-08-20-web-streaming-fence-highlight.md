@@ -21,6 +21,8 @@ The final full-document parse still resolves document-wide references and math. 
 
 ## Testing
 
+The Markdown regression tests assert a visible language banner and highlighted tokens before settlement. A plain streaming arm is a rendering regression, not a snapshot update.
+
 Package tests bound the grammar input accumulated across 800 open-fence lines, compare each incremental result with a full parse, and cover indented delimiters, CRLF split across chunks, closure fallback, and non-append reset. Highlighter tests cover incremental/from-scratch equivalence across multiline grammar state, blank lines, CRLF, and markup styles; delta identity and reset/lazy paths; fixed-group DOM retention; streamed-to-settled DOM identity; and plain or math fallbacks. The assembled Web browser snapshot boots the real Web composition, streams a TypeScript fence through the Host and SSE path, pauses the deterministic LLM adapter while the reply is still active, and snapshots Chromium's Shiki token tree before verifying that settlement preserves it. The `tests/fixtures/markdown-dom/*.streaming.txt` fixtures pin the intentional streaming divergence from their react-markdown origin: the Shiki span tree and visible language banner replace the plain arm.
 
 ## Alternatives considered

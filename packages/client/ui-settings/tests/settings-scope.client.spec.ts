@@ -562,11 +562,11 @@ describe('SettingsScopeBinder.bind', () => {
   it('binds an authenticated proxy browser to Host persistence when explicitly configured', async () => {
     const describeCall = vi.fn().mockResolvedValue(described({ preference: 'dark' }, 1))
     const wire = { settings: { describe: describeCall } }
-    const mirror = new SettingsDescribeMirror(wire as never, 'host')
     const ctx = new Context()
     ctx.provide('connection', { api: wire, isLoopback: false } as never)
     let scope!: SettingsScope<UiTestSettings>
-    new TestRemote(ctx)
+    new TestRemote(ctx, wire)
+    const mirror = new SettingsDescribeMirror(ctx, 'host')
     await ctx.plugin(SettingsScopeBinder, {
       mirror,
       schema: settingsSchema,

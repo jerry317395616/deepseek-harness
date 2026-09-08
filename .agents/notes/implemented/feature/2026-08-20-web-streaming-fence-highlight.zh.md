@@ -21,6 +21,8 @@ Status: implemented
 
 ## Testing
 
+Markdown 回归测试在定稿前断言语言横幅可见且代码 token 已高亮。流式阶段退回纯文本属于渲染回退，不应通过更新快照接受。
+
 包测试会约束 800 行未闭合 fence 的累计 grammar 输入量、逐次比较增量结果与全量解析，并覆盖缩进分隔符、跨分片 CRLF、闭合回退与非追加重置。高亮测试覆盖跨多行 grammar state、空行、CRLF 与 markup 样式的增量／从头等价性，delta 标识与重置／懒加载路径，固定分组的 DOM 保留，从流式到定稿的 DOM 标识，以及纯文本和 math 回退。组装后的 Web 浏览器快照会启动真实 Web 组合，让 TypeScript 围栏经过 Host 与 SSE 路径流式传输，在回复仍活跃时暂停确定性 LLM 适配器并对 Chromium 中的 Shiki token 树做快照，然后验证定稿保留该 token 树。`tests/fixtures/markdown-dom/*.streaming.txt` fixture 锁定相对 react-markdown 来源的一项有意分叉：Shiki span 树与可见语言横幅取代纯文本臂。
 
 ## Alternatives considered
