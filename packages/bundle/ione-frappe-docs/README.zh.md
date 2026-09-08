@@ -51,8 +51,8 @@ Bundle 行停用时为零。启用后，插入的包会提供固定提示区段�
 
 启用或停用 Bundle 会改变系统提示和工具前缀。同步索引不会改变 Bundle 组合。
 
-<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与待处理工作
+<a id="known-limitations-and-deferred-work"></a>
 
 - **由部署负责同步**——本地索引存在并由部署层提供绝对路径之前，Bundle 会保持停用。
 - **只读检索**——插入的包不能同步、编辑或发布官方文档。

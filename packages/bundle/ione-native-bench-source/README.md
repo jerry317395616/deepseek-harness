@@ -1,8 +1,25 @@
+---
+description: "Opt-in Native Bench source evidence layer for deployment-owned Harness profiles."
+kind: "package-bundle"
+---
+
 # `@deepseek-ai/dsh-ione-native-bench-source`
 
 English | [中文](README.zh.md)
 
+## Summary
+
 This opt-in Bundle inserts `@deepseek-ai/dsh-tool-native-bench-source`. A later profile or home patch must enable the row and supply the deployment-owned Native Bench root.
+
+## Table of Contents
+
+- [Deployment configuration](#deployment-configuration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+<a id="deployment-configuration"></a>
+## Deployment configuration
 
 ```yaml
 - id: native-bench-source
@@ -31,3 +48,8 @@ Enabling or disabling the Bundle changes the mounted prompt and tool prefix. Cha
 ## Known Limitations and Deferred Work
 
 - **Deployment-owned activation** — the Bundle deliberately remains disabled until a profile supplies an explicit Native Bench root.
+
+<a id="dev-note"></a>
+### Dev Note
+
+None.

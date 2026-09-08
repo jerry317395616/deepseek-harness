@@ -66,8 +66,8 @@ The routing section is small and fixed. Search results are capped at 20 sections
 
 Mounting or unmounting the package changes the system-prompt and tool prefix. Synchronizing content does not change the prompt or schemas; only later tool results reflect the new index.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+<a id="known-limitations-and-deferred-work"></a>
 
 - **Lexical retrieval** — the first production index uses FTS5 BM25 plus product, version, and language filtering. The calling model should include English Frappe terms for Chinese questions. A multilingual embedding provider can be added later without changing the three tool schemas.
 - **Documentation is not runtime truth** — current official pages can differ from the installed Native Bench versions. Answers about deployed behavior must prefer active source, site metadata, and permitted data reads.

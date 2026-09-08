@@ -1,8 +1,25 @@
+---
+description: "为部署方管理的 Harness Profile 提供可选的 Native Bench 源码证据层。"
+kind: "package-bundle"
+---
+
 # `@deepseek-ai/dsh-ione-native-bench-source`
 
 [English](README.md) | 中文
 
+## 概述
+
 这是一个可选组合包，用于插入 `@deepseek-ai/dsh-tool-native-bench-source`。安装后需要由 Profile 或主目录补丁启用该行，并提供部署拥有的 Native Bench 根目录。
+
+## 目录
+
+- [部署配置](#deployment-configuration)
+- [模型体验](#model-experience)
+- [已知限制与待处理工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+<a id="deployment-configuration"></a>
+## 部署配置
 
 ```yaml
 - id: native-bench-source
@@ -31,3 +48,8 @@
 ## Known Limitations and Deferred Work
 
 - **部署方启用** — 组合包默认保持禁用，直到 Profile 提供明确的 Native Bench 根目录。
+
+<a id="dev-note"></a>
+### 开发备注
+
+无。

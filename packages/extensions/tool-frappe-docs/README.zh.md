@@ -66,8 +66,8 @@ python3 packages/extensions/tool-frappe-docs/python/frappe_docs_kb.py \
 
 启用或停用本包会改变系统提示和工具前缀。同步文档内容不会改变提示或工具结构，只有后续工具结果会反映新索引。
 
-<a id="known-limitations-and-deferred-work"></a>
 ## 已知限制与待处理工作
+<a id="known-limitations-and-deferred-work"></a>
 
 - **词法检索**——首个生产索引使用 FTS5 BM25，并结合产品、版本和语言筛选。中文问题应由调用模型补充对应英文 Frappe 技术词。以后可以增加多语言向量提供方，而无需修改三个工具结构。
 - **文档不是运行事实**——当前官方页面可能与 Native Bench 已安装版本不同。回答部署行为时必须优先使用当前源码、站点元数据和获准的数据读取。

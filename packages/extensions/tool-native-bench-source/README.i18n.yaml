@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/tool-native-bench-source/README.md
 README.md: e34c70c73b296ff42150ad104c3d5a4af926072c
-README.zh.md: 39da0782b2b897c0ef42005266c0ce0c4b97e2fc
+README.zh.md: faadcf23d2bd9eb283eee7aa60ce704ef102740a

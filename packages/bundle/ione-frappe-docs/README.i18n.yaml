@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/ione-frappe-docs/README.md
-README.md: fb2ad10d735bf50f87ccb9ac148c669a28517fa8
-README.zh.md: c940241ff49027fbf506771042a9322b24210844
+README.md: 28dece1fe1dbddd53319a6a3d29beb4609ed2ae0
+README.zh.md: 96d0c25795202af4ff059e06a6c4a789e1597d7e

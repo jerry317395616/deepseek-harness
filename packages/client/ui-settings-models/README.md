@@ -7,11 +7,22 @@ kind: "package-reference"
 
 English | [中文](README.zh.md)
 
+## Summary
+
 Models settings and product-onboarding plugin. The same client Cordis plugin registers the Models page plus the conditional official-DeepSeek credential step through `settings.onboarding`. The Models plane joins three wire domains into one shared snapshot — `llm.providers` (the configurable-provider directory with each route's live/dormant state), `settings.describe` (serialized schemas, layered redacted values, secret slots), and `credentials.describe` (value-free configured/source/writable badges) — and renders provider rows with one editor card at a time, without presenting route liveness as provider status.
 
 `dsh-client-ui-settings-models` is the Models settings page of the dsh web client: users configure API keys (stored write-only under the profile's credential reference), edit each provider's model list, and hand-declare custom pi-ai routes, with provider rows and one editor card at a time. The page joins the provider directory, the settings document, and the credential descriptions into one shared snapshot, so a row's state stays consistent across all three. It also walks first-run users through two ordered dialogs — a versioned internal-testing notice and the conditional official-DeepSeek credential step.
 
 The DeepSeek step projects first-run readiness from the same joined Models snapshot. ANY provider the user can already reach ends it without rendering — a registered route whose named credential reference is stored, including a read-only launch-environment credential, or one whose profile names no reference and therefore authenticates natively. Only a user with none is asked for the official DeepSeek key. A mounted, active adapter with a missing writable reference renders the existing `ProviderEditor` in credential-only mode inside the shared onboarding modal; `credentials.set` stays the only secret write, and no provider settings are changed. Configure later completes only this coordinator pass. An absent adapter, inactive route, failed join, read-only deployment, or unusable settings or credential capability completes the step without rendering; Models remains the diagnostic surface.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
 
 -----
 

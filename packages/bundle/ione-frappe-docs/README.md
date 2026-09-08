@@ -51,8 +51,8 @@ Zero while the Bundle row is disabled. When enabled, the inserted package contri
 
 Enabling or disabling the Bundle changes the mounted prompt and tool prefix. Index synchronization does not change the Bundle composition.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+<a id="known-limitations-and-deferred-work"></a>
 
 - **Deployment-owned synchronization** — the Bundle remains disabled until the local index exists and its absolute path is supplied by a deployment layer.
 - **Read-only retrieval** — the inserted package cannot synchronize, edit, or publish official documentation.

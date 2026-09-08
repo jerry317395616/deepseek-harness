@@ -7,11 +7,22 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
+## 概述
+
 模型设置与产品引导插件。同一个 client Cordis 插件会注册 Models 页面，并通过 `settings.onboarding` 注册按条件显示的 DeepSeek 官方凭据步骤。Models 平面把三个协议领域汇聚为一个共享快照：`llm.providers`（可配置提供方目录，含每条路由的存活／休眠状态）、`settings.describe`（序列化 schema、分层脱敏值、secret slot）与 `credentials.describe`（不含值的 configured/source/writable 徽标）；页面据此渲染提供方行，一次只展开一张编辑卡片，且不把路由存活状态呈现为提供方状态。
 
 `dsh-client-ui-settings-models` 是 dsh Web 客户端的 Models 设置页面：用户可以配置 API 密钥（以只写方式存入 profile 的凭据引用之下）、编辑每个提供方的模型列表，并手工声明自定义 pi-ai 路由；页面以提供方行展示，一次只展开一张编辑卡片。该页面把提供方目录、设置文档与凭据描述合并为一个共享快照，因此行的状态在三个方面始终一致。它还会带首次运行的用户走两个有序弹窗——版本化内测声明，以及按条件显示的官方 DeepSeek 凭据步骤。
 
 DeepSeek 步骤会从同一个 Models 联接快照得出首次运行就绪状态。只要用户已经能触达**任何**一个提供方，它就直接完成而不渲染——已注册且其具名凭据引用已存储的路由（包括来自启动环境且只读的凭据），或 profile 根本不指名引用、因而走原生认证的路由。只有二者皆无的用户才会被要求填写 DeepSeek 官方密钥。适配器已挂载且活跃、引用可写但尚未配置时，既有 `ProviderEditor` 会以仅凭据模式渲染在共用引导弹窗中；`credentials.set` 仍是唯一的 secret 写入，且不会改变提供方设置。「稍后配置」只完成协调器当前这一轮。适配器缺失、路由不活跃、联接失败、部署只读或设置／凭据能力不可用时，该步骤不渲染并直接完成；Models 页仍是诊断界面。
+
+## 目录
+
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [进一步探索](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
 -----
 

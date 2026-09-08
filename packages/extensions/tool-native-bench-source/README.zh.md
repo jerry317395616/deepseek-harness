@@ -6,11 +6,11 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
-## Summary
+## 概述
 
 查找当前站点使用的 Frappe 源码。解析路由并规划童健云扩展，不编辑上游应用。可选 Host 策略禁止任意执行和所有 DocType 变更。数据库访问仍由独立的 Frappe 桥接负责。
 
-## Table of Contents
+## 目录
 
 - [Use this package](#use-this-package)
 - [Understand the implementation](#understand-the-implementation)
@@ -97,7 +97,7 @@ Host 策略安装提前拒绝钩子和不可被放行覆盖的全局拦截器。
 - **源码版本**——源码目录不是历史发布哈希。
 
 <a id="dev-note"></a>
-### Dev Note
+### 开发备注
 
 <details>
 <summary>维护说明——点击展开</summary>

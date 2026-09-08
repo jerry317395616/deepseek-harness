@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/extensions/tool-native-bench-frappe/README.md
 README.md: 8a0331a85e7be3db83649443c7b7a9799bd7997c
-README.zh.md: 13c8f156f4aebd2a76503b65086082f19192561d
+README.zh.md: b3e9995aaf06da5a46eb5eccdc4491408616553b
