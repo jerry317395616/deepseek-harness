@@ -32,6 +32,8 @@ export interface Config {
   ownersDirectory: string
   /** Complete HTTP operation deadline, including authority checks. */
   timeoutMs: number
+  /** Separate bounded deadline for multi-step prompts; tools retain timeoutMs. */
+  promptTimeoutMs?: number
   /** Maximum simultaneous requests admitted by this plugin. */
   maxRequests: number
   /** Maximum ownership records scanned by a list operation. */
@@ -53,6 +55,7 @@ export const Config: schema<Config> = schema.object({
   identitySocketPath: schema.string(),
   ownersDirectory: schema.string(),
   timeoutMs: schema.number().step(1).min(1).max(120000),
+  promptTimeoutMs: schema.number().step(1).min(1).max(600000),
   maxRequests: schema.number().step(1).min(1).max(64),
   maxOwnershipEntries: schema.number().step(1).min(1).max(100000),
   maxResponseBytes: schema.number().step(1).min(1024).max(5000000),
@@ -63,6 +66,12 @@ export const Config: schema<Config> = schema.object({
 })
 
 const COOKIE = '__Host-dsh-shared'
+/** Longer deadlines apply only to the exact prompt route, never read or auth operations. */
+export function employeeRequestDeadline(config: Pick<Config, 'timeoutMs' | 'promptTimeoutMs'>,
+  method: string | undefined, url: string | undefined): number {
+  return method === 'POST' && url === '/employee/session/prompt'
+    ? (config.promptTimeoutMs ?? config.timeoutMs) : config.timeoutMs
+}
 const emptySchema = z.object({}).strict()
 const pageSchema = z.object({
   sessionId: z.string().regex(/^session-[0-9a-f-]{36}$/u),
@@ -262,7 +271,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const destroy = (): void => { req.destroy(); res.destroy() }
     const expire = (): void => { abort.abort() }
     const disconnected = (): void => { abort.abort() }
-    const timer = setTimeout(expire, config.timeoutMs)
+    const timer = setTimeout(expire, employeeRequestDeadline(config, req.method, req.url))
     timer.unref()
     abort.signal.addEventListener('abort', destroy, { once: true })
     res.once('close', disconnected)
