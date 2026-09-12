@@ -2,6 +2,7 @@
  * Optional read-only turns retain request-private identity through execution.
  */
 import { randomUUID } from 'node:crypto'
+import { appendFile } from 'node:fs/promises'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { isAbsolute } from 'node:path'
 import { brandString } from '@deepseek-ai/dsh-brand'
@@ -269,8 +270,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
 
   async function handle(req: IncomingMessage, res: ServerResponse, abort: AbortController): Promise<void> {
     const destroy = (): void => { req.destroy(); res.destroy() }
-    const expire = (): void => { abort.abort() }
-    const disconnected = (): void => { abort.abort() }
+    const began = Date.now()
+    let endCause = 'completed'
+    let beats = 0
+    const expire = (): void => { endCause = 'server_deadline'; abort.abort() }
+    const disconnected = (): void => { if (!res.writableEnded) endCause = 'downstream_closed'; abort.abort() }
     let heartbeat: ReturnType<typeof setInterval> | undefined
     const timer = setTimeout(expire, employeeRequestDeadline(config, req.method, req.url))
     timer.unref()
@@ -317,10 +321,11 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
         heartbeat = setInterval(() => {
           if (res.destroyed || res.writableEnded || res.writableNeedDrain) return
           if (!res.headersSent) res.writeHead(200, {
-            'content-type': 'application/json', 'cache-control': 'no-store',
+            'content-type': 'application/json', 'cache-control': 'no-store, no-transform',
             'x-accel-buffering': 'no', 'x-content-type-options': 'nosniff',
           })
-          res.write(' \n')
+          res.write(' '.repeat(8191) + '\n')
+          beats++
         }, 10000)
         heartbeat.unref()
       }
@@ -329,10 +334,16 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       if (Buffer.byteLength(serialized) > config.maxResponseBytes) throw new EmployeeAccessError(503)
       send(res, 200, serialized)
     } catch (error) {
+      if (endCause === 'completed') endCause = 'handler_error'
       send(res, error instanceof EmployeeAccessError ? error.status : 503, '{"error":"employee access unavailable"}')
     } finally {
       clearTimeout(timer)
       if (heartbeat !== undefined) clearInterval(heartbeat)
+      if (req.url === '/employee/session/prompt') void appendFile(
+        '/home/zyd/frappe/logs/harness/prompt-diagnostic.jsonl',
+        JSON.stringify({ time: new Date().toISOString(), durationMs: Date.now() - began,
+          endCause, beats, headersSent: res.headersSent, ended: res.writableEnded }) + '\n',
+        { mode: 0o600 }).catch(() => {})
       abort.signal.removeEventListener('abort', destroy)
       res.off('close', disconnected)
     }
