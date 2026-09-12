@@ -82,7 +82,7 @@ const pageSchema = z.object({
 }).strict()
 const readSchema = z.object({
   sessionId: pageSchema.shape.sessionId,
-  operation: z.enum(['frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
+  operation: z.enum(['frappe_list_doctypes', 'frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
   arguments: z.record(z.string(), z.unknown()),
 }).strict()
 const promptSchema = z.object({ sessionId: pageSchema.shape.sessionId, text: z.string().min(1).max(6000),

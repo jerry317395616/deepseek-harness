@@ -15,7 +15,7 @@ const PREVIEW_TOOL = 'employee_application_preview'
 const previewQuery = z.object({ operation: z.string().min(1).max(64),
   arguments: z.record(z.string(), z.unknown()) }).strict()
 const query = z.object({
-  operation: z.enum(['frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
+  operation: z.enum(['frappe_list_doctypes', 'frappe_describe_doctype', 'frappe_list_documents', 'frappe_get_document']),
   arguments: z.record(z.string(), z.unknown()),
 }).strict()
 
@@ -31,7 +31,7 @@ export function employeeReadTool(read: (input: unknown, execution: ToolExecution
     name: TOOL,
     description: 'Read permitted Frappe metadata, lists or one record using your current login. Never supply an account, site, SQL or executable code.',
     parameters: {
-      operation: { type: 'string', required: true, description: 'frappe_describe_doctype, frappe_list_documents or frappe_get_document.' },
+      operation: { type: 'string', required: true, description: 'Discover actual business objects with frappe_list_doctypes using arguments {search:"optional name or module substring",start:0,limit:20}; then frappe_describe_doctype, frappe_list_documents or frappe_get_document. Discovery is subject to account policy; never invent DocType names.' },
       arguments: { type: 'object', additionalProperties: true, required: true, description: 'Describe: {doctype}. List: {doctype, fields:["name",...actual field names], filters:{field:value}, limit:20, start:0}. Get: {doctype,name,fields:[...actual field names]}. Explicitly select the business fields needed; name-only results do NOT mean other fields are unavailable. limit must be 1..100; start 0..100000; equality filters only; order_by only "name asc". Use metadata Link options to read related records with independent permission checks. Use total_count, not rows.length, for totals. Never SQL, expressions, account or site.' },
     },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
