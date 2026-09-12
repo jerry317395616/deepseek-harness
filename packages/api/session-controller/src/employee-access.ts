@@ -205,7 +205,7 @@ function credential(request: IncomingMessage): string {
 
 function send(response: ServerResponse, status: number, value?: string, headers: Record<string, string> = {}): void {
   if (response.destroyed) return
-  response.writeHead(status, { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer',
+  if (!response.headersSent) response.writeHead(status, { 'cache-control': 'no-store', 'referrer-policy': 'no-referrer',
     'content-type': 'application/json', 'x-content-type-options': 'nosniff', ...headers })
   response.end(value)
 }
@@ -271,6 +271,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     const destroy = (): void => { req.destroy(); res.destroy() }
     const expire = (): void => { abort.abort() }
     const disconnected = (): void => { abort.abort() }
+    let heartbeat: ReturnType<typeof setInterval> | undefined
     const timer = setTimeout(expire, employeeRequestDeadline(config, req.method, req.url))
     timer.unref()
     abort.signal.addEventListener('abort', destroy, { once: true })
@@ -308,7 +309,22 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       const operation = /^\/employee\/session\/(create|list|page|read|prompt|capabilities|review|confirm)$/u.exec(url.pathname)?.[1]
       if (operation === undefined) throw new EmployeeAccessError(404)
       const limit = operation === 'prompt' && config.allowImages === true ? (config.maxPromptBytes ?? 8192) : 8192
-      const result = await access.execute(operation, await body(req, abort.signal, limit), login, abort.signal)
+      const input = await body(req, abort.signal, limit)
+      if (operation === 'prompt') {
+        await identity.authorize(login, abort.signal)
+        // JSON permits leading whitespace. Keep intermediaries active without
+        // replaying a prompt or releasing any business data before authorization.
+        heartbeat = setInterval(() => {
+          if (res.destroyed || res.writableEnded || res.writableNeedDrain) return
+          if (!res.headersSent) res.writeHead(200, {
+            'content-type': 'application/json', 'cache-control': 'no-store',
+            'x-accel-buffering': 'no', 'x-content-type-options': 'nosniff',
+          })
+          res.write(' \n')
+        }, 10000)
+        heartbeat.unref()
+      }
+      const result = await access.execute(operation, input, login, abort.signal)
       const serialized = JSON.stringify(result)
       if (Buffer.byteLength(serialized) > config.maxResponseBytes) throw new EmployeeAccessError(503)
       send(res, 200, serialized)
@@ -316,6 +332,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       send(res, error instanceof EmployeeAccessError ? error.status : 503, '{"error":"employee access unavailable"}')
     } finally {
       clearTimeout(timer)
+      if (heartbeat !== undefined) clearInterval(heartbeat)
       abort.signal.removeEventListener('abort', destroy)
       res.off('close', disconnected)
     }
