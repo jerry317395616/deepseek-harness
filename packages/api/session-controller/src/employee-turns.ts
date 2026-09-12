@@ -32,7 +32,7 @@ export function employeeReadTool(read: (input: unknown, execution: ToolExecution
     description: 'Read permitted Frappe metadata, lists or one record using your current login. Never supply an account, site, SQL or executable code.',
     parameters: {
       operation: { type: 'string', required: true, description: 'frappe_describe_doctype, frappe_list_documents or frappe_get_document.' },
-      arguments: { type: 'object', additionalProperties: true, required: true, description: 'Structured query object: doctype; optional fields, filters, order_by, limit, start; name for one record.' },
+      arguments: { type: 'object', additionalProperties: true, required: true, description: 'Describe: {doctype}. List: {doctype, fields:["name",...actual field names], filters:{field:value}, limit:20, start:0}. Get: {doctype,name,fields:[...actual field names]}. Explicitly select the business fields needed; name-only results do NOT mean other fields are unavailable. limit must be 1..100; start 0..100000; equality filters only; order_by only "name asc". Use metadata Link options to read related records with independent permission checks. Use total_count, not rows.length, for totals. Never SQL, expressions, account or site.' },
     },
     output: { schema: { type: 'string' }, render: (_args, value) => [{ type: 'text', text: value }] },
     timeoutMs,
