@@ -79,8 +79,7 @@ async function fixture(overrides: Partial<Config> = {}) {
       },
       async page() { return { records: [], hasMore: false } },
     },
-    sessions: { get() { return missingSession ? undefined : {} } },
-    sessionPersistence: { async ensureMaterialized() {} },
+    sessions: { get() { return missingSession ? undefined : {} }, async flush() { return true } },
     effect(factory: () => () => Promise<void> | void) {
       const dispose = factory()
       const previous = release

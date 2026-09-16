@@ -67,7 +67,13 @@ export const Config: schema<Config> = schema.object({
 })
 
 const COOKIE = '__Host-dsh-shared'
-/** Longer deadlines apply only to the exact prompt route, never read or auth operations. */
+/**
+ * Longer deadlines apply only to the exact prompt route, never read or auth operations.
+ * @param config - Deployment-owned read and optional prompt deadlines.
+ * @param method - Incoming HTTP method.
+ * @param url - Incoming request URL, including any query string.
+ * @returns The complete operation deadline in milliseconds.
+ */
 export function employeeRequestDeadline(config: Pick<Config, 'timeoutMs' | 'promptTimeoutMs'>,
   method: string | undefined, url: string | undefined): number {
   return method === 'POST' && url === '/employee/session/prompt'
@@ -260,7 +266,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   const access = new EmployeeSessionAccess(ctx.sessionController, owners, identity, async (sessionId) => {
     const session = ctx.sessions.get(sessionId)
     if (session === undefined) throw new EmployeeAccessError(503)
-    await ctx.sessionPersistence.ensureMaterialized(session)
+    await ctx.sessions.flush(session)
   }, execution, config.applicationPreviews === true ? identity : undefined, async (sessionId, signal) => {
     using observation = await ctx.sessionQuery.observeSession(sessionId, { signal, projectionMode: 'none' })
     return observation.cursor

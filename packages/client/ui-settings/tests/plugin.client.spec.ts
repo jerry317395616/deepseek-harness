@@ -4,6 +4,7 @@ import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply, inject, settingsPersistence } from '../src/client/index.ts'
 import { SettingsSchemaService } from '../src/client/schema.ts'
 import { SettingsScopeBinder } from '../src/client/settings-scope.ts'
+import { apply as hostApply } from '../src/index.ts'
 
 function bench() {
   const describeCall = vi.fn().mockResolvedValue({
@@ -19,6 +20,10 @@ describe('settings domain base plugin', () => {
     expect(settingsPersistence(true, false)).toBe('host')
     expect(settingsPersistence(false, true)).toBe('host')
     expect(settingsPersistence(false, false)).toBe('memory')
+  })
+
+  it('keeps the host Loader entry inert', () => {
+    expect(hostApply).not.toThrow()
   })
 
   it('mounts the scope service under settingsScope and reads once eagerly', async () => {

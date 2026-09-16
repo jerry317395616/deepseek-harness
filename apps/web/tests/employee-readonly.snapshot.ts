@@ -1,12 +1,13 @@
 /** Recorded employee model boundary through the real shipped Web subprocess. */
-import { access, readFile, writeFile } from 'node:fs/promises'
+import { access, readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it, vi } from 'vitest'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
 import {
-  normalizeSessionSnapshots, normalizedSystemPrompts, normalizedToolSchemas,
+  normalizeSessionSnapshot, redactSessionSnapshotIds, normalizedSystemPrompts, normalizedToolSchemas,
   formatSystemPromptSnapshot, formatToolSchemasSnapshot,
+  sessionFixtureFiles, sessionFixtureName, sessionHeaderVersion,
 } from '@deepseek-ai/dsh-session-snapshot'
 import {
   disposeEmployeeFixtures, logs, startEmployee,
@@ -15,13 +16,15 @@ import {
 import { sharedLogin, startSharedAuthority } from '../../cli/tests/profiles/employee-readonly/shared.ts'
 
 const fixtureDir = fileURLToPath(new URL('../../../snapshots/web/employee-readonly', import.meta.url))
-const fixtureFile = join(fixtureDir, 'session.jsonl')
 const disposers: (() => Promise<unknown>)[] = []
 afterEach(() => disposeEmployeeFixtures(disposers))
 
 it('replays an unavailable shell call with only business-reader schemas and unchanged workspace', async () => {
   const mode = process.env.DSH_SNAPSHOT || 'replay'
   if (mode !== 'replay' && mode !== 'refresh') throw new Error('employee fixture supports keyless replay and refresh only')
+  const selected = sessionFixtureFiles(await readdir(fixtureDir))[0]
+  if (selected === undefined) throw new Error('employee fixture missing')
+  const fixtureFile = join(fixtureDir, selected.name)
   const fixture = await readFile(fixtureFile, 'utf8')
   const user = parseSessionLog(fixture).find(event => event.type === 'user/message')
   if (user?.type !== 'user/message') throw new Error('employee fixture lacks a user message')
@@ -60,14 +63,15 @@ it('replays an unavailable shell call with only business-reader schemas and unch
     expect((await employee.raw('/employee/session/list')).status).toBe(401)
   }
   const context = { sessionIds: [id], cwd: host.root }
-  const [normalized] = normalizeSessionSnapshots([raw], context)
-  if (normalized === undefined) throw new Error('employee session normalization failed')
+  const [redacted] = redactSessionSnapshotIds([raw])
+  if (redacted === undefined) throw new Error('employee session normalization failed')
+  const normalized = normalizeSessionSnapshot(redacted, context, { identityMode: 'preserve' })
   const prompts = normalizedSystemPrompts(raw, context)
   const schemas = normalizedToolSchemas(raw, context)
   expect(prompts).toHaveLength(1)
   expect(schemas).toHaveLength(1)
   const artifacts = [
-    [fixtureFile, normalized],
+    [join(fixtureDir, sessionFixtureName(0, sessionHeaderVersion(normalized, 'employee output'))), normalized],
     [join(fixtureDir, 'system-prompt.expected.md'), formatSystemPromptSnapshot(prompts[0] as string)],
     [join(fixtureDir, 'tool-schemas.expected.json'), formatToolSchemasSnapshot(schemas[0] as unknown[])],
   ] as const

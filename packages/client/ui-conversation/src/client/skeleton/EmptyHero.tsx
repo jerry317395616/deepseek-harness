@@ -142,7 +142,10 @@ export function HeroShell({ t, renderSlot, children }: HeroShellProps) {
               fallback: <IoneHarnessLogo size={34} className={css.fish} />,
             })}
           </span>
-          <span className={css.headlineText}>{t('hero.headline')}</span>
+          <span className={css.titleGroup}>
+            {/* Own element: keeps the headline text addressable apart from the badge. */}
+            <span>{t('hero.headline')}</span>
+          </span>
         </div>
         <div className={css.body}>
           {/* The composer remains mounted outside this component. */}

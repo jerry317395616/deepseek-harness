@@ -472,12 +472,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
   private startRemoteEvent(source: TypertRemoteEventInvocation): void {
     try {
       assertRemoteEventName(source)
-      const context = this.ctx.typert.contexts.identifyHost(source.context.value)
-      if (context === undefined) {
-        source.resolve({ kind: 'next' })
-        return
-      }
-      if (context.kind !== 'agent' || !isRemoteEventAgentId(context.identity)) {
+      if (!isRemoteEventAgentId(source.context.agentId)) {
         throw new TypeError(
           'typert gateway: scoped Remote events require a non-empty Agent identity',
         )
@@ -491,7 +486,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
           () => () => {
             this.cancelRemoteEvent(
               pending,
-              new Error(`typert gateway: Remote event Context ${JSON.stringify(context.kind)} was released`),
+              new Error('typert gateway: Remote event Agent Context was released'),
             )
           },
           `api-gateway: Remote event ${JSON.stringify(source.event)}`,
@@ -515,7 +510,7 @@ export class TypertGatewayService extends Service implements TypertGateway {
           type: 'waterfall',
           event: source.event,
           eventId: id,
-          agentId: context.identity,
+          agentId: source.context.agentId,
           request: projected.request,
         },
         deliveries: new Set(),
@@ -1171,7 +1166,7 @@ function decode(
 ): unknown {
   try {
     if (codec.mode === 'strict') {
-      value = codec.schema.parse(value)
+      value = codec.create().parse(value)
       /* v8 ignore next -- generated optional-input codecs are the only strict codecs that return undefined. */
       if (value === undefined) return value
     }

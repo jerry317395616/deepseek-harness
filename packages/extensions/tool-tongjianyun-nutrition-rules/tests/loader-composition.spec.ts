@@ -264,7 +264,7 @@ describe('Tongjianyun nutrition-rule Loader composition', () => {
 
     const nutritionEntry = [...ctx.loader.entries()].find(entry => entry.options.id === 'tongjianyun-nutrition-rules')
     if (nutritionEntry === undefined) throw new Error('nutrition rules entry is missing')
-    await nutritionEntry._dispose()
+    await nutritionEntry.fiber?.dispose()
     expect(ctx.tools.schemas()).toEqual([])
     expect((await ctx.systemPrompt.assemble()).sections.some(
       section => section.name === 'tool:tongjianyun-nutrition',

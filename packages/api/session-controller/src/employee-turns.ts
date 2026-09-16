@@ -245,7 +245,8 @@ export class EmployeeTurns {
       await agent.whenIdle()
       await this.check(run, signal)
       if (!run.entered || run.failed) throw new EmployeeAccessError(401)
-      return { settled: true, throughSeq: agent.session.events.at(-1)?.seq ?? -1 }
+      using observation = await this.ctx.sessionQuery.observeSession(sessionId, { signal, projectionMode: 'none' })
+      return { settled: true, throughSeq: observation.cursor }
     } finally {
       run.failed = true
       const agent = this.ctx.agents.get(sessionId)

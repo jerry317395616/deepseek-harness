@@ -9,9 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package exposes bounded search, page-read, and index-status tools over official `docs.frappe.io` content. A deployment synchronizes the official sitemap and prefers each page's Markdown alternate, with a same-origin HTML article or main-body fallback, into a local SQLite FTS5 index. Model calls never crawl the network, trigger synchronization, choose a host path, or write the index.
-
-The package complements, rather than replaces, runtime evidence. Questions about the deployed site use the active Native Bench source and Frappe metadata first. The documentation index explains official framework and product behavior, and every result retains its official URL, product route, version route, language, and update date.
+Search and read a locally synchronized index of official Frappe documentation. Deployment-managed synchronization prefers Markdown and falls back to same-origin HTML article content. Model calls cannot crawl, synchronize, choose host paths, or write the index. Results retain their official URL, product, version, language, and update date. Use this reference alongside active Native Bench source and site metadata; documentation does not replace evidence from the deployed system.
 
 ## Table of Contents
 

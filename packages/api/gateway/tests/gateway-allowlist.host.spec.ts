@@ -227,7 +227,7 @@ describe('deployment Remote endpoint allowlist', () => {
     const gatewayEntry = [...host.ctx.loader.entries()].find(item => item.options.id === 'gateway')
     if (gatewayEntry === undefined) throw new Error('missing gateway entry')
     const closed = once(wire.socket, 'close')
-    await gatewayEntry._dispose()
+    await gatewayEntry.fiber?.dispose()
     await closed
     expect((await host.post('employeeProbe/read', {})).status).toBe(404)
   })

@@ -41,6 +41,7 @@ function fixture(previews = false) {
     on(name: string, callback: (...args: unknown[]) => unknown) { handlers.set(name, callback) },
     effect(callback: () => () => unknown) { effects.push(callback()) },
     agents: { get: () => agent },
+    sessionQuery: { async observeSession() { return { cursor: -1, [Symbol.dispose]() {} } } },
     tools: { guard: () => () => {} },
     sessionProjections: { stateOf: () => 'shared' },
     sessionController: { async prompt(request: SessionPromptRequest) {

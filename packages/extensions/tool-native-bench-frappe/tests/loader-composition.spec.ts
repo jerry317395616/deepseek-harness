@@ -23,6 +23,8 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as NativeFrappe from '../src/index.ts'
 
 class StubNativeSubprocess extends SubprocessRuntime {
+  override async terminalEnvironment() { return { platform: 'posix' as const } }
+
   readonly specs: SubprocessSpawnSpec[] = []
 
   override resolveExecutable(command: string): Promise<string> {
@@ -36,7 +38,7 @@ class StubNativeSubprocess extends SubprocessRuntime {
     const output = JSON.stringify({ ok: true, result: { operation, source: 'loader-composition' } })
     const outcome: SubprocessOutcome = { exitCode: 0, signal: null }
     return {
-      pid: this.specs.length,
+      control: undefined,
       stdin: undefined,
       stdout: undefined,
       stderr: undefined,
@@ -150,7 +152,7 @@ describe('Native Bench Frappe Loader composition', () => {
     )?.text).toContain('每次读取都由服务端校验签名登录身份')
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'native-bench-frappe')
     if (entry === undefined) throw new Error('business entry is missing')
-    await entry._dispose()
+    await entry.fiber?.dispose()
     expect(ctx.tools.schemas()).toEqual([])
   })
 
@@ -181,7 +183,7 @@ describe('Native Bench Frappe Loader composition', () => {
 
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'native-bench-frappe')
     if (entry === undefined) throw new Error('native-bench-frappe entry is missing')
-    await entry._dispose()
+    await entry.fiber?.dispose()
     expect(ctx.tools.schemas()).toEqual([])
     expect((await ctx.systemPrompt.assemble()).sections.some(
       section => section.name === 'tool:native-bench-frappe',

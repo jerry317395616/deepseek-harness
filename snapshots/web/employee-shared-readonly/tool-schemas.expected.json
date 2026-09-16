@@ -8,11 +8,11 @@
         "properties": {
           "operation": {
             "type": "string",
-            "description": "frappe_describe_doctype, frappe_list_documents or frappe_get_document."
+            "description": "Discover actual business objects with frappe_list_doctypes using arguments {search:\"optional name or module substring\",start:0,limit:20}; then frappe_describe_doctype, frappe_list_documents or frappe_get_document. Discovery is subject to account policy; never invent DocType names."
           },
           "arguments": {
             "type": "object",
-            "description": "Structured query object: doctype; optional fields, filters, order_by, limit, start; name for one record.",
+            "description": "Describe: {doctype}. List: {doctype, fields:[\"name\",...actual field names], filters:{field:value}, limit:20, start:0}. Get: {doctype,name,fields:[...actual field names]}. Explicitly select the business fields needed; name-only results do NOT mean other fields are unavailable. limit must be 1..100; start 0..100000; equality filters only; order_by only \"name asc\". Use metadata Link options to read related records with independent permission checks. Use total_count, not rows.length, for totals. Never SQL, expressions, account or site.",
             "additionalProperties": true
           }
         },

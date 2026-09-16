@@ -9,9 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Registers ten native Harness tools for Tongjianyun weekly-menu nutrition. Three read-only tools explain one standard, compare the 4-, 5-, and 6-year-old standards in one operation, and calculate the latest or selected recipe from real Tongjianyun data. Six controlled tools cover the nutrition-rule lifecycle, and one publishes generated reports. In default `native` mode, read operations run the installed Tongjianyun Frappe functions in the active Native Bench process. `mcp` is an explicit compatibility mode for authenticated network calls and rule writes.
-
-Configure the package through a profile or Bundle patch. Native mode pins the active Bench, site, Python environment, and fixed Frappe account; the account is deployment-owned and never model-supplied. The helper imports `tongjianyun.mcp_tools` after `frappe.init()` and permits only three read operations. For explicit MCP mode, `credentialRef` names a credential-store value containing the Frappe integration account in `api_key:api_secret` form. Dynamic identity and `actorTokenRef` remain supported. `timeoutMs` is enforced by the Harness tool-timeout policy.
+Query Tongjianyun nutrition data and, in explicitly configured MCP mode, manage nutrition rules and publish reports. Default native mode runs three permitted read operations in the configured Native Bench. The deployment fixes the Bench, site, Python environment, and Frappe account; the model cannot choose them. MCP calls require configured authentication and can use dynamic actor identity. The tool-timeout policy bounds each call.
 
 ## Table of Contents
 

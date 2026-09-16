@@ -18,6 +18,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as NativeFrappe from '../src/index.ts'
 
 class StubNativeSubprocess extends SubprocessRuntime {
+  override async terminalEnvironment() { return { platform: 'posix' as const } }
+
   readonly specs: SubprocessSpawnSpec[] = []
 
   override resolveExecutable(command: string): Promise<string> {
@@ -33,7 +35,7 @@ class StubNativeSubprocess extends SubprocessRuntime {
     const reader = { readFrom: () => ({ text: output, nextOffset: output.length, lossy: false }) }
     const outcome: SubprocessOutcome = { exitCode: 0, signal: null }
     return {
-      pid: this.specs.length,
+      control: undefined,
       stdin: undefined,
       stdout: undefined,
       stderr: undefined,

@@ -64,7 +64,9 @@ export async function startEmployee(
       ownersDirectory: join(home, 'employee-owners'), timeoutMs: 30000, maxRequests: 16,
       maxOwnershipEntries: 10000, maxResponseBytes: 1000000, promptPreset: 'employee-shared-readonly',
     } }] : []),
-    { id: 'llm-deepseek', disabled: replayFixture !== undefined, config: { baseURL, apiKeyEnv: 'EMPLOYEE_FIXTURE_MODEL_KEY' } },
+    { id: 'llm-deepseek', disabled: replayFixture !== undefined, config: {
+      baseURL, apiKeyEnv: 'EMPLOYEE_FIXTURE_MODEL_KEY', protocol: 'chat-completions',
+    } },
     ...(replayFixture === undefined ? [] : [{ insert: [{
       id: 'llm-replay', name: '@deepseek-ai/dsh-llm-replay', config: {
         file: replayFixture,

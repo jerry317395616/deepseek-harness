@@ -83,8 +83,9 @@
 - id: skill-badge
   disabled: true
 
-- id: commands
-  disabled: true
+# Keep the inert command registry: upstream fileUploads now requires it, and
+# sessionController requires fileUploads. No command tools or command RPCs are
+# exposed to this preset; both admission and the gateway allowlist remain closed.
 
 - id: command-feedback
   disabled: true
@@ -114,6 +115,15 @@
   disabled: true
 
 - id: code-runtime
+  disabled: true
+
+- id: ptc-runtime
+  disabled: true
+
+- id: terminal-controller
+  disabled: true
+
+- id: workspace-files
   disabled: true
 
 - id: message-feedback

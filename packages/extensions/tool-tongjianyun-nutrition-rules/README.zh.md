@@ -9,9 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包为童健云周食谱营养业务提供十个原生 Harness 工具。三个只读工具分别解释单项标准、一次对比4岁/5岁/6岁全部标准，以及基于真实数据计算最新或指定食谱；六个受控工具覆盖营养规则生命周期，另一个负责发布生成的报告。默认 `native` 模式会在当前 Native Bench 进程中直接运行已安装的童健云 Frappe 函数；`mcp` 是用于已认证网络调用和规则写操作的显式兼容模式。
-
-请通过 Profile 或 Bundle 补丁配置本包。Native 模式固定当前 Bench、站点、Python 环境和 Frappe 账号；账号由部署管理，模型不能提供。辅助进程初始化 Frappe 后只允许调用三个只读操作。显式 MCP 模式下，`credentialRef` 指向凭据库中的 Frappe 集成账号，值为 `api_key:api_secret`。动态身份和 `actorTokenRef` 仍兼容。`timeoutMs` 由 Harness 的工具超时策略执行。
+查询童健云营养数据，并在显式配置的 MCP 模式下管理营养规则、发布报告。默认 native 模式仅在配置的 Native Bench 中执行三项允许的读取操作。Bench、站点、Python 环境及 Frappe 账号由部署方固定，模型不能指定。MCP 调用需要配置认证，并可使用动态操作者身份。每次调用受工具超时策略约束。
 
 ## 目录
 

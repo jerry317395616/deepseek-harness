@@ -23,6 +23,8 @@ import ToolRuntime from '@deepseek-ai/dsh-tools'
 import * as FrappeDocs from '../src/index.ts'
 
 class StubDocsSubprocess extends SubprocessRuntime {
+  override async terminalEnvironment() { return { platform: 'posix' as const } }
+
   override resolveExecutable(command: string): Promise<string> {
     return Promise.resolve(command)
   }
@@ -33,7 +35,7 @@ class StubDocsSubprocess extends SubprocessRuntime {
     const output = JSON.stringify({ ok: true, result: { operation, source: 'loader-composition' } })
     const outcome: SubprocessOutcome = { exitCode: 0, signal: null }
     return {
-      pid: 1,
+      control: undefined,
       stdin: undefined,
       stdout: undefined,
       stderr: undefined,
@@ -130,7 +132,7 @@ describe('Frappe documentation Loader composition', () => {
 
     const entry = [...ctx.loader.entries()].find(candidate => candidate.options.id === 'frappe-docs')
     if (entry === undefined) throw new Error('frappe-docs entry is missing')
-    await entry._dispose()
+    await entry.fiber?.dispose()
     expect(ctx.tools.schemas()).toEqual([])
     expect((await ctx.systemPrompt.assemble()).sections.some(
       section => section.name === 'tool:frappe-docs',

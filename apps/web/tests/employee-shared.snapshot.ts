@@ -1,11 +1,12 @@
 /** Recorded authenticated read through one shipped Web process, never the Host prompt API. */
-import { readFile, writeFile } from 'node:fs/promises'
+import { readFile, readdir, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterEach, expect, it } from 'vitest'
 import { parseSessionLog } from '@deepseek-ai/dsh-llm-replay'
-import { normalizeSessionSnapshots, normalizedSystemPrompts, normalizedToolSchemas,
-  formatSystemPromptSnapshot, formatToolSchemasSnapshot } from '@deepseek-ai/dsh-session-snapshot'
+import { normalizeSessionSnapshot, redactSessionSnapshotIds, normalizedSystemPrompts, normalizedToolSchemas,
+  formatSystemPromptSnapshot, formatToolSchemasSnapshot,
+  sessionFixtureFiles, sessionFixtureName, sessionHeaderVersion } from '@deepseek-ai/dsh-session-snapshot'
 import { disposeEmployeeFixtures, logs, startEmployee } from '../../cli/tests/profiles/employee-readonly/harness.ts'
 import { sharedLogin, startSharedAuthority } from '../../cli/tests/profiles/employee-readonly/shared.ts'
 
@@ -17,7 +18,9 @@ it.skipIf(process.platform !== 'linux').each([false, true])('replays authenticat
     ? '../../../snapshots/web/employee-shared-preview' : '../../../snapshots/web/employee-shared-readonly', import.meta.url))
   const mode = process.env.DSH_SNAPSHOT || 'replay'
   if (mode !== 'replay' && mode !== 'refresh') throw new Error('shared fixture supports keyless replay and refresh only')
-  const file = join(directory, 'session.jsonl')
+  const selected = sessionFixtureFiles(await readdir(directory))[0]
+  if (selected === undefined) throw new Error('shared fixture missing')
+  const file = join(directory, selected.name)
   const user = parseSessionLog(await readFile(file, 'utf8')).find(event => event.type === 'user/message')
   if (user?.type !== 'user/message') throw new Error('shared fixture lacks a user message')
   const content = user.data.content[0]
@@ -44,14 +47,15 @@ it.skipIf(process.platform !== 'linux').each([false, true])('replays authenticat
   expect(raw).not.toContain(employee.cookie.split('=')[1])
   expect(raw).not.toContain('teacher@example.test')
   const context = { sessionIds: [created.sessionId], cwd: host.root }
-  const [normalized] = normalizeSessionSnapshots([raw], context)
-  if (normalized === undefined) throw new Error('missing normalized shared session')
+  const [redacted] = redactSessionSnapshotIds([raw])
+  if (redacted === undefined) throw new Error('missing normalized shared session')
+  const normalized = normalizeSessionSnapshot(redacted, context, { identityMode: 'preserve' })
   const prompts = normalizedSystemPrompts(raw, context)
   const schemas = normalizedToolSchemas(raw, context)
   expect(prompts).toHaveLength(1)
   expect(schemas).toHaveLength(1)
   for (const [path, value] of [
-    [file, normalized],
+    [join(directory, sessionFixtureName(0, sessionHeaderVersion(normalized, 'shared output'))), normalized],
     [join(directory, 'system-prompt.expected.md'), formatSystemPromptSnapshot(prompts[0] as string)],
     [join(directory, 'tool-schemas.expected.json'), formatToolSchemasSnapshot(schemas[0] as unknown[])],
   ]) {

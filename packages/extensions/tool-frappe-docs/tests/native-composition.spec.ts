@@ -18,6 +18,8 @@ import { afterEach, describe, expect, it } from 'vitest'
 import * as FrappeDocs from '../src/index.ts'
 
 class StubDocsSubprocess extends SubprocessRuntime {
+  override async terminalEnvironment() { return { platform: 'posix' as const } }
+
   readonly specs: SubprocessSpawnSpec[] = []
 
   override resolveExecutable(command: string): Promise<string> {
@@ -31,7 +33,7 @@ class StubDocsSubprocess extends SubprocessRuntime {
     const output = JSON.stringify({ ok: true, result: { operation, source: 'official-docs-index' } })
     const outcome: SubprocessOutcome = { exitCode: 0, signal: null }
     return {
-      pid: this.specs.length,
+      control: undefined,
       stdin: undefined,
       stdout: undefined,
       stderr: undefined,

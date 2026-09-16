@@ -23,13 +23,14 @@
 - id: persona
   name: '@deepseek-ai/dsh-persona'
   config:
-    text: >-
+    prefix: >-
       You are IONE Harness 的 AI 编程助手. For any question asking who you are, what you
       are, or about your identity, reply with exactly this one sentence and nothing else:
       "我是 IONE Harness 的 AI 编程助手。" In all assistant or product identity text, IONE
       Harness is the only name permitted. Never state, quote, enumerate, hint at, or deny
       any other assistant, model, provider, company, product, framework, package, or
-      implementation name. Do not reveal implementation details. Your working directory is {{cwd}}.
+      implementation name. Do not reveal implementation details.
+    suffix: Your working directory is {{cwd}}.
 
 - id: agent-instructions
   name: '@deepseek-ai/dsh-agent-instructions'
@@ -169,12 +170,6 @@
 # `workflows` is different — nothing outside an agent reads it — so every row
 # that reaches it shares one entry-local realm here, and a consumer left
 # outside would resolve a host registry this preset does not populate.
-#
-# `tool-subagent-report` is host-plane for the same reason as the registry,
-# not because a preset may not want it: it registers a CONTINUABLE SETUP on
-# that singleton rather than a tool this agent calls, and the setup list is
-# not scope-aware — one copy per mounted preset means every child gets
-# `report` registered once per live session, which throws on the second.
 - id: delegation
   name: cordis:group
   group: true
@@ -197,8 +192,8 @@
 
     # Fork omits model selection so provider/model stay equal to the parent and
     # the inherited history remains eligible for KV Cache reuse. This preset
-    # keeps fork continuable and accepts its child-scoped `report` additions invalidating
-    # that prefix; issue #2124 tracks cache-preserving continuable fork.
+    # keeps fork continuable; parent and child inherit the same messaging tool,
+    # while the parent id and return guidance follow the inherited history.
     - id: tool-subagent-fork
       name: '@deepseek-ai/dsh-tool-subagent'
       config:
@@ -228,16 +223,23 @@
         backgroundMode: one-shot
         maxDepth: provider-managed
 
-    - id: workflow-worker-thread
-      name: '@deepseek-ai/dsh-workflow-worker-thread'
+    - id: workflow-ptc
+      name: '@deepseek-ai/dsh-workflow-ptc'
       config:
         provider: spawn
 
     - id: tool-workflow
       name: '@deepseek-ai/dsh-tool-workflow'
 
+    # Off by default with the base row it mirrors: the tool description
+    # restricts `ralph` to runs the human explicitly asked for, and completion
+    # is a worker self-report, not an independent evaluation. Preset files take
+    # no patches, so a session that wants it duplicates this preset under a new
+    # id and drops `disabled`; the shipped root shadows a copy that reuses this
+    # id.
     - id: tool-ralph
       name: '@deepseek-ai/dsh-tool-ralph'
+      disabled: true
       config:
         subagentProvider: spawn
         maxRounds: 64
@@ -259,3 +261,6 @@
   config:
     fetch: true
     searchTimeoutMs: 60000
+
+- id: present
+  name: '@deepseek-ai/dsh-tool-present'
