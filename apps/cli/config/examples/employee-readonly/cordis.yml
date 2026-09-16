@@ -123,6 +123,18 @@
 - id: terminal-controller
   disabled: true
 
+# Business sessions do not expose host terminals or native application launch.
+# Keep their browser companions disabled when the corresponding host services
+# are unavailable, so the complete Client composition can still activate.
+- id: ui-sidebar-terminal
+  disabled: true
+
+- id: open-in-app
+  disabled: true
+
+- id: ui-open-in-app
+  disabled: true
+
 - id: workspace-files
   disabled: true
 

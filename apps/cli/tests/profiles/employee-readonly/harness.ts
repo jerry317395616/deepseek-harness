@@ -144,6 +144,9 @@ export async function startEmployee(
   if (cookie === undefined) throw new Error('employee browser credential exchange failed')
   const html = await (await fetch(origin, { headers: { cookie } })).text()
   expect(html).toContain('__DSH_BOOT__')
+  // Disabled host capabilities must not leave unresolved browser companions.
+  expect(html).not.toContain('@deepseek-ai/dsh-client-ui-sidebar-terminal')
+  expect(html).not.toContain('@deepseek-ai/dsh-client-ui-open-in-app')
   const proxy = sharedAccess === undefined ? await wrapEmployeeProxy(disposers, origin, cookie, url) : undefined
   const headers = proxy?.headers ?? {}
   if (proxy !== undefined) { origin = proxy.origin; cookie = proxy.cookie }
