@@ -21,6 +21,8 @@ kind: "package-bundle"
 <a id="deployment-configuration"></a>
 ## 部署配置
 
+本包不发布运行时不变量伴随模块，因为除了所属服务已执行的检查外，本包没有独立的事件序列或可变关系需要额外校验。
+
 ```yaml
 - id: native-bench-source
   name: '@deepseek-ai/dsh-tool-native-bench-source'

@@ -408,10 +408,6 @@ flowchart TD
   pkg_web --> pkg_llm
   pkg_attachment --> pkg_brand
   pkg_browser_use --> pkg_brand
-  pkg_ione_frappe_docs --> pkg_invariants
-  pkg_ione_native_bench_frappe --> pkg_invariants
-  pkg_ione_native_bench_source --> pkg_invariants
-  pkg_ione_tongjianyun_nutrition_rules --> pkg_invariants
   pkg_computer_use --> pkg_brand
   pkg_credentials --> pkg_invariants
   pkg_experimental_inspector --> pkg_client_modules
@@ -500,7 +496,6 @@ flowchart TD
   pkg_fs --> pkg_invariants
   pkg_fs --> pkg_llm
   pkg_fs --> pkg_sandbox
-  pkg_web_search_searxng --> pkg_invariants
   pkg_web_search_searxng --> pkg_settings
   pkg_web_search_searxng --> pkg_web
   pkg_spill_local --> pkg_spill
@@ -857,24 +852,20 @@ flowchart TD
   pkg_cordis_host_runner --> pkg_session
   pkg_cordis_host_runner --> pkg_tools
   pkg_cordis_host_runner --> pkg_typert_protocol
-  pkg_tool_frappe_docs --> pkg_invariants
   pkg_tool_frappe_docs --> pkg_subprocess
   pkg_tool_frappe_docs --> pkg_system_prompt
   pkg_tool_frappe_docs --> pkg_tools
   pkg_tool_frappe_docs --> pkg_util_values
-  pkg_tool_native_bench_frappe --> pkg_invariants
   pkg_tool_native_bench_frappe --> pkg_subprocess
   pkg_tool_native_bench_frappe --> pkg_system_prompt
   pkg_tool_native_bench_frappe --> pkg_tools
   pkg_tool_native_bench_frappe --> pkg_util_values
   pkg_tool_native_bench_source --> pkg_fs
-  pkg_tool_native_bench_source --> pkg_invariants
   pkg_tool_native_bench_source --> pkg_subprocess
   pkg_tool_native_bench_source --> pkg_system_prompt
   pkg_tool_native_bench_source --> pkg_tools
   pkg_tool_native_bench_source --> pkg_util_values
   pkg_tool_tongjianyun_nutrition_rules --> pkg_credentials
-  pkg_tool_tongjianyun_nutrition_rules --> pkg_invariants
   pkg_tool_tongjianyun_nutrition_rules --> pkg_subprocess
   pkg_tool_tongjianyun_nutrition_rules --> pkg_system_prompt
   pkg_tool_tongjianyun_nutrition_rules --> pkg_tools
@@ -1336,6 +1327,10 @@ flowchart TD
 | [`cmdline`](../packages/boot/cmdline) | `boot` | — |
 | [`acp-app`](../packages/bundle/acp-app) | `bundle` | — |
 | [`base`](../packages/bundle/base) | `bundle` | — |
+| [`ione-frappe-docs`](../packages/bundle/ione-frappe-docs) | `bundle` | — |
+| [`ione-native-bench-frappe`](../packages/bundle/ione-native-bench-frappe) | `bundle` | — |
+| [`ione-native-bench-source`](../packages/bundle/ione-native-bench-source) | `bundle` | — |
+| [`ione-tongjianyun-nutrition-rules`](../packages/bundle/ione-tongjianyun-nutrition-rules) | `bundle` | — |
 | [`sdk-app`](../packages/bundle/sdk-app) | `bundle` | — |
 | [`sdk-minimal`](../packages/bundle/sdk-minimal) | `bundle` | — |
 | [`client-connection`](../packages/client/connection) | `client` | — |
@@ -1416,10 +1411,6 @@ flowchart TD
 | [`web`](../packages/web/web) | `web` | [`llm`](../packages/llm/llm) |
 | [`attachment`](../packages/attachment/attachment) | `attachment` | [`brand`](../packages/util/brand) |
 | [`browser-use`](../packages/browser-use/browser-use) | `browser-use` | [`brand`](../packages/util/brand) |
-| [`ione-frappe-docs`](../packages/bundle/ione-frappe-docs) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
-| [`ione-native-bench-frappe`](../packages/bundle/ione-native-bench-frappe) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
-| [`ione-native-bench-source`](../packages/bundle/ione-native-bench-source) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
-| [`ione-tongjianyun-nutrition-rules`](../packages/bundle/ione-tongjianyun-nutrition-rules) | `bundle` | [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`computer-use`](../packages/computer-use/computer-use) | `computer-use` | [`brand`](../packages/util/brand) |
 | [`credentials`](../packages/credentials/credentials) | `credentials` | [`invariants`](../packages/runtime-diagnostics/invariants) |
 | [`experimental-inspector`](../packages/experimental/inspector) | `experimental` | [`client-modules`](../packages/client/modules), [`host-webserver`](../packages/host/webserver) |
@@ -1461,7 +1452,7 @@ flowchart TD
 | [`session-snapshot`](../packages/test-support/session-snapshot) | `test-support` | [`http-proxy`](../packages/util/http-proxy), [`session`](../packages/core/session) |
 | [`agent`](../packages/core/agent) | `core` | [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`session-projection`](../packages/session/session-projection), [`system-prompt`](../packages/core/system-prompt), [`typert-protocol`](../packages/typert/protocol), [`util-values`](../packages/util/values) |
 | [`fs`](../packages/fs/fs) | `fs` | [`brand`](../packages/util/brand), [`invariants`](../packages/runtime-diagnostics/invariants), [`llm`](../packages/llm/llm), [`sandbox`](../packages/sandbox/sandbox) |
-| [`web-search-searxng`](../packages/web/web-search-searxng) | `web` | [`invariants`](../packages/runtime-diagnostics/invariants), [`settings`](../packages/settings/settings), [`web`](../packages/web/web) |
+| [`web-search-searxng`](../packages/web/web-search-searxng) | `web` | [`settings`](../packages/settings/settings), [`web`](../packages/web/web) |
 | [`spill-local`](../packages/spill/spill-local) | `spill` | [`spill`](../packages/spill/spill) |
 | [`session-log-export`](../packages/session-query/session-log-export) | `session-query` | [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence) |
 | [`ptc-runtime`](../packages/ptc-runtime/ptc-runtime) | `ptc-runtime` | [`sandbox`](../packages/sandbox/sandbox) |
@@ -1537,10 +1528,10 @@ flowchart TD
 | [`experimental-browser-use-stagehand-native`](../packages/experimental/browser-use-stagehand-native) | `experimental` | [`agent`](../packages/core/agent), [`browser-use`](../packages/browser-use/browser-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`experimental-computer-use-cua-driver-native`](../packages/experimental/computer-use-cua-driver-native) | `experimental` | [`computer-use`](../packages/computer-use/computer-use), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools) |
 | [`cordis-host-runner`](../packages/extensions/cordis-host-runner) | `extensions` | [`agent`](../packages/core/agent), [`brand`](../packages/util/brand), [`llm`](../packages/llm/llm), [`scope`](../packages/core/scope), [`session`](../packages/core/session), [`tools`](../packages/core/tools), [`typert-protocol`](../packages/typert/protocol) |
-| [`tool-frappe-docs`](../packages/extensions/tool-frappe-docs) | `extensions` | [`invariants`](../packages/runtime-diagnostics/invariants), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
-| [`tool-native-bench-frappe`](../packages/extensions/tool-native-bench-frappe) | `extensions` | [`invariants`](../packages/runtime-diagnostics/invariants), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
-| [`tool-native-bench-source`](../packages/extensions/tool-native-bench-source) | `extensions` | [`fs`](../packages/fs/fs), [`invariants`](../packages/runtime-diagnostics/invariants), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
-| [`tool-tongjianyun-nutrition-rules`](../packages/extensions/tool-tongjianyun-nutrition-rules) | `extensions` | [`credentials`](../packages/credentials/credentials), [`invariants`](../packages/runtime-diagnostics/invariants), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
+| [`tool-frappe-docs`](../packages/extensions/tool-frappe-docs) | `extensions` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
+| [`tool-native-bench-frappe`](../packages/extensions/tool-native-bench-frappe) | `extensions` | [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
+| [`tool-native-bench-source`](../packages/extensions/tool-native-bench-source) | `extensions` | [`fs`](../packages/fs/fs), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
+| [`tool-tongjianyun-nutrition-rules`](../packages/extensions/tool-tongjianyun-nutrition-rules) | `extensions` | [`credentials`](../packages/credentials/credentials), [`subprocess`](../packages/subprocess/subprocess), [`system-prompt`](../packages/core/system-prompt), [`tools`](../packages/core/tools), [`util-values`](../packages/util/values) |
 | [`message-feedback`](../packages/feedback/message-feedback) | `feedback` | [`brand`](../packages/util/brand), [`command-feedback`](../packages/feedback/command-feedback), [`llm`](../packages/llm/llm), [`session`](../packages/core/session), [`session-persistence`](../packages/session/session-persistence), [`typert-protocol`](../packages/typert/protocol) |
 | [`repeat-tool-reminder`](../packages/guard/repeat-tool-reminder) | `guard` | [`agent`](../packages/core/agent), [`tools`](../packages/core/tools) |
 | [`tool-call-timeout-policy`](../packages/guard/timeout-policy) | `guard` | [`llm`](../packages/llm/llm), [`timeout`](../packages/util/timeout), [`tools`](../packages/core/tools) |

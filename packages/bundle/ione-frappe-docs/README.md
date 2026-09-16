@@ -24,6 +24,8 @@ This opt-in Bundle inserts `@deepseek-ai/dsh-tool-frappe-docs`. A later profile 
 
 ## Use this package
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 ```yaml
 - id: frappe-docs
   name: '@deepseek-ai/dsh-tool-frappe-docs'

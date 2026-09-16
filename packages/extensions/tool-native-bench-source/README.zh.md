@@ -22,6 +22,8 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## Use this package
 
+本包不发布运行时不变量伴随模块，因为除了所属服务已执行的检查外，本包没有独立的事件序列或可变关系需要额外校验。
+
 通过可信配置挂载插件。
 
 ### When to choose it

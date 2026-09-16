@@ -24,6 +24,8 @@ Search and read a locally synchronized index of official Frappe documentation. D
 
 ## Configuration
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 ```yaml
 - id: frappe-docs
   name: '@deepseek-ai/dsh-tool-frappe-docs'

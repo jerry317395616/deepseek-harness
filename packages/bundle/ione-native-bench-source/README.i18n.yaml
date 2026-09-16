@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/bundle/ione-native-bench-source/README.md
-README.md: 2ea286e1657b98bc6af80aeb78bdeb884e3dc2d8
-README.zh.md: b8480b11d6d9f54575ad8ff53c558da423c429fe
+README.md: 9aadf887e88e566bbec1cf8d68e11a39cb33da2f
+README.zh.md: 76a8b949ec2a6b9360eb1b185dfd2ea675b6deb4

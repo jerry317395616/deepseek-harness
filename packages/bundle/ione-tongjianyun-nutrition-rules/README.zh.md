@@ -21,6 +21,8 @@ kind: "package-bundle"
 <a id="configuration"></a>
 ## 配置
 
+本包不发布运行时不变量伴随模块，因为除了所属服务已执行的检查外，本包没有独立的事件序列或可变关系需要额外校验。
+
 请在后续的 Profile 或主目录 `cordis.patch.yml` 中以完整配置启用它：
 
 ```yaml

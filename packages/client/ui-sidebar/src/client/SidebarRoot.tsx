@@ -182,7 +182,7 @@ export function SidebarRoot({
               <span className={css.brandName}>
                 {renderSlot('sidebar.brand.name', {}, {
                   fallback: (
-                    <span className={css.fallbackBrandName}>ione harness</span>
+                    <span className={css.fallbackBrandName}>{t('brand.name')}</span>
                   ),
                 })}
               </span>

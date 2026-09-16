@@ -21,6 +21,8 @@ Query Tongjianyun nutrition data and, in explicitly configured MCP mode, manage 
 <a id="configuration"></a>
 ## Configuration
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 ```yaml
 - id: tongjianyun-nutrition-rules
   name: '@deepseek-ai/dsh-tool-tongjianyun-nutrition-rules'

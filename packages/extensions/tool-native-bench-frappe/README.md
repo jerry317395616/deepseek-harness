@@ -25,6 +25,8 @@ Use this package to inspect safe Frappe metadata and read permitted business rec
 <a id="use-this-package"></a>
 ## Use this package
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 Mount the package through a profile or Bundle patch. The deployment owns the Bench root, site, executable, account and scope; a model call cannot supply them.
 
 ### Maintenance configuration

@@ -23,6 +23,8 @@ This opt-in Bundle inserts `@deepseek-ai/dsh-tool-native-bench-frappe`. A later 
 <a id="use-this-package"></a>
 ## Use this package
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 ```yaml
 - id: native-bench-frappe
   name: '@deepseek-ai/dsh-tool-native-bench-frappe'

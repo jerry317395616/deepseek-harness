@@ -21,6 +21,8 @@ This opt-in Bundle inserts `@deepseek-ai/dsh-tool-native-bench-source`. A later 
 <a id="deployment-configuration"></a>
 ## Deployment configuration
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 ```yaml
 - id: native-bench-source
   name: '@deepseek-ai/dsh-tool-native-bench-source'

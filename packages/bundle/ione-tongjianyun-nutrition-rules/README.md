@@ -21,6 +21,8 @@ An opt-in Bundle that inserts the [Tongjianyun nutrition-rule tool](../../extens
 <a id="configuration"></a>
 ## Configuration
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 Enable it in a later profile or home `cordis.patch.yml` with the complete row configuration:
 
 ```yaml

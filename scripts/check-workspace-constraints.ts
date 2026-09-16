@@ -169,6 +169,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
     'python/employee_read_broker.py', 'python/shared_identity.py',
   ],
   '@deepseek-ai/dsh-tool-frappe-docs': ['python/frappe_docs_kb.py'],
+  '@deepseek-ai/dsh-tool-native-bench-source': ['lib/policy.js'],
   '@deepseek-ai/dsh-experimental-ptc-runtime-python': ['py/**/*.py'],
   // The isolated Node bootstrap is a separately launched bundle.
   '@deepseek-ai/dsh-ptc-runtime-node': ['lib/process.js'],

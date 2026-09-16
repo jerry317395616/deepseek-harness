@@ -21,6 +21,8 @@ kind: "package-reference"
 <a id="configuration"></a>
 ## 配置
 
+本包不发布运行时不变量伴随模块，因为除了所属服务已执行的检查外，本包没有独立的事件序列或可变关系需要额外校验。
+
 | 配置项 | 默认值 | 说明 |
 |---|---|---|
 | `baseURL` | `http://127.0.0.1:8088` | SearXNG 地址；提供方自动追加 `/search?q=…&format=json`。 |

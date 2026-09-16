@@ -21,6 +21,8 @@ English | [中文](README.zh.md)
 <a id="configuration"></a>
 ## Configuration
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 | Key | Default | Meaning |
 |---|---|---|
 | `baseURL` | `http://127.0.0.1:8088` | SearXNG origin. The provider appends `/search?q=…&format=json`. |

@@ -1,5 +1,6 @@
 import { IoneHarnessLogo } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { SidebarBrandMarkOwnerProps } from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import { en as brand } from './locales.ts'
 
 type OfficialBrandMarkProps = SidebarBrandMarkOwnerProps & { className?: string }
 
@@ -19,7 +20,7 @@ export function OfficialBrandMark({ size, className }: OfficialBrandMarkProps) {
 export function OfficialBrandName() {
   return (
     <span
-      aria-label="ione harness"
+      aria-label={brand.name}
       style={{
         alignItems: 'baseline',
         color: 'var(--dsw-alias-label-primary)',
@@ -33,8 +34,8 @@ export function OfficialBrandName() {
         whiteSpace: 'nowrap',
       }}
     >
-      <span>ione</span>
-      <span style={{ color: '#1677ff', fontWeight: 650 }}>harness</span>
+      <span>{brand.product}</span>
+      <span style={{ color: '#1677ff', fontWeight: 650 }}>{brand.family}</span>
     </span>
   )
 }

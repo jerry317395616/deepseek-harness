@@ -22,6 +22,8 @@ Find the Frappe source serving the current site. Resolve routes and plan Tongjia
 <a id="use-this-package"></a>
 ## Use this package
 
+No runtime invariant companion is published because this package has no independent event sequence or mutable relationship beyond the checks performed by its owning services.
+
 Mount the plugin through trusted profile configuration.
 
 ### When to choose it
